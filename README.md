@@ -30,6 +30,7 @@ Toutes les sections sont optionnelles — ne configurez que ce qui existe chez v
 ```yaml
 type: custom:energy-flow-card
 title: Énergie
+weather_entity: weather.maison   # optionnel : fond animé selon la météo (soleil, nuages, pluie, neige, nuit)
 solar:
   power: sensor.inverter_pv_power        # puissance instantanée totale
   energy_today: sensor.inverter_today_production
@@ -93,6 +94,7 @@ car:
 | `voltage` / `current` / `temperature` / `soh` (battery) | Valeurs optionnelles affichées en petit — proposées par la détection automatique, supprimez celles que vous ne voulez pas voir |
 | `voltage` / `frequency` (grid) | Valeurs optionnelles affichées en petit |
 | `sum_pv` (solar) | `true` = ignore `power` et affiche la somme des lignes PV à la place |
+| `weather_entity` (carte) | Entité `weather.*` optionnelle — anime le fond de la carte selon la condition (soleil, nuageux, pluie, neige, nuit) |
 | `connected` (grid) | `binary_sensor` optionnel — l'anneau du nœud Réseau clignote en rouge si son état passe à "off" |
 | `charging` (car) | `binary_sensor` explicite pour l'état de charge (sinon déduit de `power`) |
 

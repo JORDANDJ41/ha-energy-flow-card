@@ -32,6 +32,20 @@ function numState(hass, entityId) {
 // Format an instantaneous power value, auto-choosing W / kW based on the
 // entity's own unit_of_measurement (so it works whether the source sensor
 // already reports in W or kW).
+function weatherTheme(hass, weatherEntityId) {
+  if (!weatherEntityId) return "theme-default";
+  const st = getState(hass, weatherEntityId);
+  const condition = st ? st.state : null;
+  if (!condition) return "theme-default";
+  const c = condition.toLowerCase();
+  if (c === "clear-night") return "theme-night";
+  if (c === "sunny") return "theme-sunny";
+  if (c.includes("snow")) return "theme-snowy";
+  if (c.includes("rain") || c.includes("pour") || c.includes("lightning") || c === "hail") return "theme-rainy";
+  if (c.includes("cloud") || c === "fog" || c.includes("windy")) return "theme-cloudy";
+  return "theme-default";
+}
+
 function formatWatts(watts) {
   const abs = Math.abs(watts);
   if (abs >= 1000) return (watts / 1000).toFixed(2).replace(".", ",") + " kW";
@@ -202,8 +216,28 @@ class EnergyFlowCard extends HTMLElement {
     const style = `
       <style>
         :host { display:block; }
-        ha-card { padding: 16px 12px 10px; }
+        ha-card { padding: 16px 12px 10px; position:relative; overflow:hidden; }
+        .efc-content { position:relative; z-index:1; }
         .title { font-size: 1rem; font-weight: 600; color: var(--primary-text-color); margin: 0 4px 8px; }
+        .efc-scene { position:absolute; inset:0; overflow:hidden; z-index:0; transition: background 1.2s ease; }
+        .efc-scene.theme-sunny { background: radial-gradient(circle at 75% 12%, rgba(251,191,36,.3), transparent 55%), linear-gradient(160deg, #2b2f55 0%, #1b2340 60%); }
+        .efc-scene.theme-sunny::before { content:""; position:absolute; top:-18%; right:-8%; width:260px; height:260px; border-radius:50%; background: radial-gradient(circle, rgba(251,191,36,.5), transparent 70%); filter: blur(30px); animation: efc-float 18s ease-in-out infinite; }
+        .efc-scene.theme-cloudy { background: linear-gradient(160deg, #3a4160 0%, #1b2340 65%); }
+        .efc-scene.theme-cloudy::before, .efc-scene.theme-cloudy::after { content:""; position:absolute; width:220px; height:90px; border-radius:50%; background: rgba(255,255,255,.07); filter: blur(18px); }
+        .efc-scene.theme-cloudy::before { top:6%; left:-10%; animation: efc-drift 28s linear infinite; }
+        .efc-scene.theme-cloudy::after { top:26%; left:25%; opacity:.6; animation: efc-drift 36s linear infinite reverse; }
+        .efc-scene.theme-rainy { background: linear-gradient(160deg, #1f2740 0%, #141a2e 70%); }
+        .efc-scene.theme-rainy::before { content:""; position:absolute; inset:-20% -20%; background-image: repeating-linear-gradient(115deg, rgba(148,197,255,.16) 0 2px, transparent 2px 14px); animation: efc-rain 1s linear infinite; }
+        .efc-scene.theme-snowy { background: linear-gradient(160deg, #2c3350 0%, #1b2340 70%); }
+        .efc-scene.theme-snowy::before { content:""; position:absolute; inset:-10%; background-image: radial-gradient(rgba(255,255,255,.5) 1px, transparent 1.5px); background-size: 46px 60px; animation: efc-snow 9s linear infinite; }
+        .efc-scene.theme-night { background: radial-gradient(circle at 70% 8%, rgba(99,102,241,.16), transparent 55%), linear-gradient(170deg, #11152a 0%, #05070f 75%); }
+        .efc-scene.theme-night::before { content:""; position:absolute; inset:0; background-image: radial-gradient(rgba(255,255,255,.85) 1px, transparent 1.3px), radial-gradient(rgba(255,255,255,.55) 1px, transparent 1.3px); background-size: 140px 120px, 90px 90px; background-position: 0 0, 40px 60px; animation: efc-twinkle 4s ease-in-out infinite alternate; }
+        @keyframes efc-float { 0%,100% { transform: translate(0,0); } 50% { transform: translate(-16px, 14px); } }
+        @keyframes efc-drift { from { transform: translateX(0); } to { transform: translateX(420px); } }
+        @keyframes efc-rain { from { background-position: 0 0; } to { background-position: -40px 120px; } }
+        @keyframes efc-snow { from { background-position: 0 0; } to { background-position: 20px 140px; } }
+        @keyframes efc-twinkle { from { opacity:.5; } to { opacity:1; } }
+        @media (prefers-reduced-motion: reduce) { .efc-scene::before, .efc-scene::after { animation:none !important; } }
         svg { width:100%; height:auto; display:block; overflow:visible; }
         .lbl { font-family: var(--paper-font-body1_-_font-family, inherit); font-size:15px; fill: var(--secondary-text-color); text-anchor:middle; }
         .val { font-size:19px; font-weight:700; fill: var(--primary-text-color); text-anchor:middle; font-variant-numeric: tabular-nums; }
@@ -348,15 +382,19 @@ class EnergyFlowCard extends HTMLElement {
       .map(([c, l]) => `<span><i class="dotkey" style="background:${c}"></i>${l}</span>`)
       .join("")}</div>`;
 
+    const theme = weatherTheme(this._hass, this._config.weather_entity);
     this.innerHTML = `
       ${style}
       <ha-card>
-        ${title}
-        <svg viewBox="0 0 640 ${totalH}" xmlns="http://www.w3.org/2000/svg">
-          ${svgFlows}
-          ${svgNodes}
-        </svg>
-        ${legend}
+        <div class="efc-scene ${theme}"></div>
+        <div class="efc-content">
+          ${title}
+          <svg viewBox="0 0 640 ${totalH}" xmlns="http://www.w3.org/2000/svg">
+            ${svgFlows}
+            ${svgNodes}
+          </svg>
+          ${legend}
+        </div>
       </ha-card>`;
 
     this.querySelectorAll("[data-node]").forEach((el) => {
@@ -393,6 +431,9 @@ class EnergyFlowCard extends HTMLElement {
     const cfg = this._config;
     const pv = Array.isArray(cfg.pv) ? cfg.pv : [];
     const THRESH = 15; // watts, below this a flow is considered "off"
+
+    const sceneEl = this.querySelector(".efc-scene");
+    if (sceneEl) sceneEl.className = `efc-scene ${weatherTheme(hass, cfg.weather_entity)}`;
 
     let solarTotal = 0;
     pv.forEach((p, i) => {
@@ -560,6 +601,9 @@ function autoDetectConfig(hass) {
   if (!hass || !hass.states) return cfg;
   const states = hass.states;
   const ids = Object.keys(states).filter((id) => id.startsWith("sensor."));
+
+  const weatherEntity = Object.keys(states).find((id) => id.startsWith("weather."));
+  if (weatherEntity) cfg.weather_entity = weatherEntity;
 
   const isPower = (id) => {
     const a = states[id].attributes || {};
@@ -1047,7 +1091,10 @@ utility_meter:
     if (missingPanel) this._form.appendChild(missingPanel);
 
     this._form.appendChild(
-      this._section("Général", [this._textRow("Titre", "title")])
+      this._section("Général", [
+        this._textRow("Titre", "title"),
+        this._row("Entité météo (optionnel, fond animé)", "weather_entity", "", ["weather"]),
+      ])
     );
 
     this._form.appendChild(
