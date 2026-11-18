@@ -268,12 +268,13 @@ class EnergyFlowCard extends HTMLElement {
     if (this._config.battery) {
       svgNodes += `
         <g transform="translate(150 ${midY})" data-node="battery" data-entity="${this._config.battery.power || ""}">
-          <circle r="60" class="ring" stroke="${colors.battery}" data-ring="battery"/>
-          <foreignObject x="-18" y="-54" width="36" height="36"><ha-icon icon="${this._config.battery.icon || DEFAULT_ICONS.battery}" style="--mdc-icon-size:28px;color:${colors.battery}"></ha-icon></foreignObject>
-          <text y="-25" class="lbl" data-f="battery-label">${this._config.battery.name || "Batterie"}</text>
-          <text y="0" class="val" data-f="battery-power">—</text>
-          <text y="17" class="sec" data-f="battery-energy"></text>
-          <text y="31" class="sec" data-f="battery-extra"></text>
+          <circle r="64" class="ring" stroke="${colors.battery}" data-ring="battery"/>
+          <foreignObject x="-18" y="-58" width="36" height="36"><ha-icon icon="${this._config.battery.icon || DEFAULT_ICONS.battery}" style="--mdc-icon-size:28px;color:${colors.battery}"></ha-icon></foreignObject>
+          <text y="-28" class="lbl" data-f="battery-label">${this._config.battery.name || "Batterie"}</text>
+          <text y="-5" class="val" data-f="battery-power">—</text>
+          <text y="12" class="sec" data-f="battery-energy"></text>
+          <text y="26" class="sec" data-f="battery-stored"></text>
+          <text y="40" class="sec" data-f="battery-extra"></text>
         </g>`;
       svgFlows += `
         <path class="flow" stroke="${colors.battery}" opacity=".25" d="M195 ${midY + 25} C 245 ${midY + 35}, 275 ${midY + 15}, 295 ${midY - 5}"/>
@@ -416,6 +417,12 @@ class EnergyFlowCard extends HTMLElement {
       );
       this._setFlow("solar-battery", charging);
       this._setFlow("battery-home", discharging);
+      if (cfg.battery.capacity_kwh && soc !== null && !Number.isNaN(soc)) {
+        const stored = (cfg.battery.capacity_kwh * soc) / 100;
+        this._setText("battery-stored", stored.toFixed(stored < 10 ? 2 : 1).replace(".", ",") + " kWh dispo");
+      } else {
+        this._setText("battery-stored", "");
+      }
       this._setText(
         "battery-extra",
         formatExtraLine(hass, [
@@ -828,6 +835,28 @@ class EnergyFlowCardEditor extends HTMLElement {
     return wrap;
   }
 
+  // A manually-typed number (not an HA entity) - e.g. the battery's usable
+  // capacity in kWh, used together with its SOC% to compute stored energy.
+  _numberRow(labelText, path) {
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "display:flex; align-items:center; gap:8px; margin-bottom:6px;";
+    const label = document.createElement("div");
+    label.textContent = labelText;
+    label.style.cssText = "width:120px; font-size:.85rem; color:var(--secondary-text-color); flex-shrink:0;";
+    const input = document.createElement("ha-textfield");
+    input.type = "number";
+    input.value = getPath(this._config, path) ?? "";
+    input.style.flex = "1";
+    input.addEventListener("input", (ev) => {
+      const v = ev.target.value;
+      setPath(this._config, path, v === "" ? undefined : parseFloat(v));
+      this._emit();
+    });
+    wrap.appendChild(label);
+    wrap.appendChild(input);
+    return wrap;
+  }
+
   _section(title, body) {
     const sec = document.createElement("div");
     sec.style.cssText = "border:1px solid var(--divider-color); border-radius:8px; padding:10px 12px; margin-bottom:12px;";
@@ -1032,6 +1061,7 @@ utility_meter:
         this._row("Courant (optionnel)", "battery.current"),
         this._row("Température (optionnel)", "battery.temperature"),
         this._row("Santé / SOH % (optionnel)", "battery.soh"),
+        this._numberRow("Capacité (kWh, manuel)", "battery.capacity_kwh"),
       ])
     );
 
