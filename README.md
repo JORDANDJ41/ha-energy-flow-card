@@ -1,4 +1,4 @@
-# Energy Flow Card
+# Multi-PV Flow Card
 
 Carte Lovelace personnalisée pour Home Assistant : un diagramme de flux d'énergie animé — solaire (une ou plusieurs lignes PV), batterie, maison, réseau et véhicule électrique — avec icônes ou logos configurables par nœud.
 
@@ -10,7 +10,7 @@ Contrairement aux cartes de flux existantes limitées à 1-2 entrées solaires f
 
 1. HACS → menu ⋮ → **Dépôts personnalisés**
 2. URL : `https://github.com/JORDANDJ41/ha-energy-flow-card`, catégorie **Lovelace**
-3. Installer **Energy Flow Card**, puis redémarrer Home Assistant (ou recharger le cache du navigateur)
+3. Installer **Multi-PV Flow Card**, puis redémarrer Home Assistant (ou recharger le cache du navigateur)
 
 ### Manuellement
 

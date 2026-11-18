@@ -1,5 +1,5 @@
 /*!
- * Energy Flow Card
+ * Multi-PV Flow Card
  * A configurable animated energy-flow diagram for Home Assistant Lovelace.
  * Supports any number of individual solar/PV strings, battery, home, grid
  * and an optional "car" node (EV charging), each with its own icon/logo,
@@ -413,7 +413,7 @@ customElements.define("energy-flow-card", EnergyFlowCard);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "energy-flow-card",
-  name: "Energy Flow Card",
+  name: "Multi-PV Flow Card",
   description:
     "Carte animée de flux d'énergie : solaire (1 à N strings PV), batterie, maison, réseau et véhicule électrique, avec icônes/logos configurables.",
   preview: false,

@@ -1,5 +1,5 @@
 {
-  "name": "Energy Flow Card",
+  "name": "Multi-PV Flow Card",
   "filename": "energy-flow-card.js",
   "content_in_root": true,
   "render_readme": true
