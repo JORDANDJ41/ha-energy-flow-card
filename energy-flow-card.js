@@ -191,9 +191,9 @@ class EnergyFlowCard extends HTMLElement {
         ha-card { padding: 16px 12px 10px; }
         .title { font-size: 1rem; font-weight: 600; color: var(--primary-text-color); margin: 0 4px 8px; }
         svg { width:100%; height:auto; display:block; overflow:visible; }
-        .lbl { font-family: var(--paper-font-body1_-_font-family, inherit); font-size:12.5px; fill: var(--secondary-text-color); text-anchor:middle; }
-        .val { font-size:16px; font-weight:700; fill: var(--primary-text-color); text-anchor:middle; font-variant-numeric: tabular-nums; }
-        .sec { font-size:10.5px; fill: var(--secondary-text-color); text-anchor:middle; font-variant-numeric: tabular-nums; }
+        .lbl { font-family: var(--paper-font-body1_-_font-family, inherit); font-size:15px; fill: var(--secondary-text-color); text-anchor:middle; }
+        .val { font-size:19px; font-weight:700; fill: var(--primary-text-color); text-anchor:middle; font-variant-numeric: tabular-nums; }
+        .sec { font-size:13px; fill: var(--secondary-text-color); text-anchor:middle; font-variant-numeric: tabular-nums; }
         .ring { fill: var(--card-background-color, #1b2340); stroke-width:2.5; cursor:pointer; }
         .ring:hover { filter: brightness(1.15); }
         .ring.alert-ring { stroke: #ef4444 !important; animation: efc-pulse 1.4s ease-in-out infinite; }
@@ -237,12 +237,12 @@ class EnergyFlowCard extends HTMLElement {
         : null;
       svgNodes += `
         <g transform="translate(${x} ${topY})" data-node="pv${i}" data-entity="${p.power || ""}">
-          <circle r="68" class="ring" stroke="${colors.pv}"/>
-          ${icon ? `<foreignObject x="-20" y="-64" width="40" height="40">${p.image ? `<img src="${p.image}" style="width:100%;height:100%;object-fit:contain"/>` : ""}</foreignObject>` : solarSvg(colors.pv)}
-          <text y="4" class="lbl">${name}</text>
+          <circle r="76" class="ring" stroke="${colors.pv}"/>
+          ${icon ? `<foreignObject x="-20" y="-70" width="40" height="40">${p.image ? `<img src="${p.image}" style="width:100%;height:100%;object-fit:contain"/>` : ""}</foreignObject>` : solarSvg(colors.pv)}
+          <text y="2" class="lbl">${name}</text>
           <text y="24" class="val" data-f="pv${i}-power">—</text>
-          <text y="41" class="sec" data-f="pv${i}-energy"></text>
-          <text y="55" class="sec" data-f="pv${i}-va"></text>
+          <text y="43" class="sec" data-f="pv${i}-energy"></text>
+          <text y="59" class="sec" data-f="pv${i}-va"></text>
         </g>`;
     });
 
@@ -251,10 +251,10 @@ class EnergyFlowCard extends HTMLElement {
       const s = this._config.solar;
       svgNodes += `
         <g transform="translate(320 ${solarY})" data-node="solar" data-entity="${s.power || ""}">
-          <circle r="66" class="ring" stroke="${colors.solar}" stroke-width="3"/>
-          <foreignObject x="-20" y="-56" width="40" height="40"><ha-icon icon="${s.icon || DEFAULT_ICONS.solar}" style="--mdc-icon-size:32px;color:${colors.solar}"></ha-icon></foreignObject>
-          <text y="2" class="val" data-f="solar-power">—</text>
-          <text y="21" class="sec" data-f="solar-energy"></text>
+          <circle r="74" class="ring" stroke="${colors.solar}" stroke-width="3"/>
+          <foreignObject x="-20" y="-62" width="40" height="40"><ha-icon icon="${s.icon || DEFAULT_ICONS.solar}" style="--mdc-icon-size:34px;color:${colors.solar}"></ha-icon></foreignObject>
+          <text y="4" class="val" data-f="solar-power">—</text>
+          <text y="24" class="sec" data-f="solar-energy"></text>
         </g>`;
       // solar -> home
       svgFlows += `
@@ -271,13 +271,13 @@ class EnergyFlowCard extends HTMLElement {
     if (this._config.battery) {
       svgNodes += `
         <g transform="translate(150 ${midY})" data-node="battery" data-entity="${this._config.battery.power || ""}">
-          <circle r="74" class="ring" stroke="${colors.battery}" data-ring="battery"/>
-          <foreignObject x="-20" y="-64" width="40" height="40"><ha-icon icon="${this._config.battery.icon || DEFAULT_ICONS.battery}" style="--mdc-icon-size:32px;color:${colors.battery}"></ha-icon></foreignObject>
-          <text y="-28" class="lbl" data-f="battery-label"></text>
-          <text y="-6" class="val" data-f="battery-power">—</text>
-          <text y="13" class="sec" data-f="battery-energy"></text>
-          <text y="28" class="sec" data-f="battery-stored"></text>
-          <text y="43" class="sec" data-f="battery-extra"></text>
+          <circle r="84" class="ring" stroke="${colors.battery}" data-ring="battery"/>
+          <foreignObject x="-20" y="-72" width="40" height="40"><ha-icon icon="${this._config.battery.icon || DEFAULT_ICONS.battery}" style="--mdc-icon-size:34px;color:${colors.battery}"></ha-icon></foreignObject>
+          <text y="-30" class="lbl" data-f="battery-label"></text>
+          <text y="-8" class="val" data-f="battery-power">—</text>
+          <text y="14" class="sec" data-f="battery-energy"></text>
+          <text y="31" class="sec" data-f="battery-stored"></text>
+          <text y="48" class="sec" data-f="battery-extra"></text>
         </g>`;
       svgFlows += `
         <path class="flow" stroke="${colors.battery}" opacity=".25" d="M195 ${midY + 25} C 245 ${midY + 35}, 275 ${midY + 15}, 295 ${midY - 5}"/>
@@ -288,10 +288,10 @@ class EnergyFlowCard extends HTMLElement {
     if (this._config.home) {
       svgNodes += `
         <g transform="translate(320 ${midY})" data-node="home" data-entity="${this._config.home.power || ""}">
-          <circle r="66" class="ring" stroke="${colors.home}" stroke-width="3"/>
-          <foreignObject x="-20" y="-56" width="40" height="40"><ha-icon icon="${this._config.home.icon || DEFAULT_ICONS.home}" style="--mdc-icon-size:32px;color:${colors.home}"></ha-icon></foreignObject>
-          <text y="2" class="val" data-f="home-power">—</text>
-          <text y="21" class="sec" data-f="home-energy"></text>
+          <circle r="74" class="ring" stroke="${colors.home}" stroke-width="3"/>
+          <foreignObject x="-20" y="-62" width="40" height="40"><ha-icon icon="${this._config.home.icon || DEFAULT_ICONS.home}" style="--mdc-icon-size:34px;color:${colors.home}"></ha-icon></foreignObject>
+          <text y="4" class="val" data-f="home-power">—</text>
+          <text y="24" class="sec" data-f="home-energy"></text>
         </g>`;
     }
 
@@ -299,11 +299,11 @@ class EnergyFlowCard extends HTMLElement {
     if (this._config.grid) {
       svgNodes += `
         <g transform="translate(490 ${midY + 15}) " data-node="grid" data-entity="${this._config.grid.power || ""}">
-          <circle r="70" class="ring" stroke="${colors.grid}" data-ring="grid"/>
-          <foreignObject x="-20" y="-60" width="40" height="40"><ha-icon icon="${this._config.grid.icon || DEFAULT_ICONS.grid}" style="--mdc-icon-size:32px;color:${colors.grid}"></ha-icon></foreignObject>
-          <text y="-2" class="val" data-f="grid-power">—</text>
-          <text y="16" class="sec" data-f="grid-energy"></text>
-          <text y="31" class="sec" data-f="grid-extra"></text>
+          <circle r="78" class="ring" stroke="${colors.grid}" data-ring="grid"/>
+          <foreignObject x="-20" y="-66" width="40" height="40"><ha-icon icon="${this._config.grid.icon || DEFAULT_ICONS.grid}" style="--mdc-icon-size:34px;color:${colors.grid}"></ha-icon></foreignObject>
+          <text y="0" class="val" data-f="grid-power">—</text>
+          <text y="19" class="sec" data-f="grid-energy"></text>
+          <text y="35" class="sec" data-f="grid-extra"></text>
         </g>`;
       svgFlows += `
         <path class="flow" stroke="${colors.grid}" d="M485 ${midY + 15} C 420 ${midY + 10}, 370 ${midY}, 348 ${midY}"/>
@@ -314,10 +314,10 @@ class EnergyFlowCard extends HTMLElement {
     if (this._config.car) {
       svgNodes += `
         <g transform="translate(320 ${carY})" data-node="car" data-entity="${this._config.car.power || ""}">
-          <circle r="64" class="ring" stroke="${colors.car}" stroke-width="3"/>
-          <foreignObject x="-20" y="-54" width="40" height="40"><ha-icon icon="${this._config.car.icon || DEFAULT_ICONS.car}" style="--mdc-icon-size:32px;color:${colors.car}"></ha-icon></foreignObject>
-          <text y="2" class="val" data-f="car-power">—</text>
-          <text y="21" class="sec" data-f="car-energy"></text>
+          <circle r="72" class="ring" stroke="${colors.car}" stroke-width="3"/>
+          <foreignObject x="-20" y="-60" width="40" height="40"><ha-icon icon="${this._config.car.icon || DEFAULT_ICONS.car}" style="--mdc-icon-size:34px;color:${colors.car}"></ha-icon></foreignObject>
+          <text y="4" class="val" data-f="car-power">—</text>
+          <text y="24" class="sec" data-f="car-energy"></text>
         </g>`;
       svgFlows += `
         <path class="flow" stroke="${colors.car}" d="M320 ${midY + 48} L 320 ${carY - 48}"/>
