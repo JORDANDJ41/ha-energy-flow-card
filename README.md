@@ -37,9 +37,13 @@ solar:
   icon: mdi:white-balance-sunny          # ou image: /local/mon_logo.png
 pv:
   - power: sensor.inverter_pv1_power
+    voltage: sensor.inverter_pv1_voltage    # optionnel, affiché en petit à côté de la puissance
+    current: sensor.inverter_pv1_current    # optionnel
     energy_today: sensor.pv1_energie_jour
     name: PV1
   - power: sensor.inverter_pv2_power
+    voltage: sensor.inverter_pv2_voltage
+    current: sensor.inverter_pv2_current
     energy_today: sensor.pv2_energie_jour
     name: PV2
   # ... autant de lignes PV que nécessaire (3, 4, ...)
@@ -77,6 +81,7 @@ car:
 | `invert_power` (battery, grid) | Inverse le signe si votre capteur suit la convention opposée |
 | `energy_today_charge` / `energy_today_discharge` (battery) | Compteurs séparés charge/décharge du jour |
 | `energy_today_buy` / `energy_today_sell` (grid) | Compteurs séparés achat/vente du jour |
+| `voltage` / `current` (pv) | Tension (V) et courant (A) de la ligne, affichés en petit sous l'énergie du jour — détectés automatiquement par numéro de ligne (PV1 cherche aussi une tension/courant "...pv1...") |
 | `charging` (car) | `binary_sensor` explicite pour l'état de charge (sinon déduit de `power`) |
 
 Cliquer sur un nœud ouvre la fenêtre "plus d'infos" de son entité `power`.

@@ -63,6 +63,21 @@ function formatEnergy(hass, entityId) {
   return kwh.toFixed(kwh < 10 ? 2 : 1).replace(".", ",") + " kWh";
 }
 
+function formatVoltageCurrent(hass, voltageId, currentId) {
+  const parts = [];
+  const v = getState(hass, voltageId);
+  if (v) {
+    const raw = parseFloat(v.state);
+    if (!Number.isNaN(raw)) parts.push(raw.toFixed(0) + " V");
+  }
+  const a = getState(hass, currentId);
+  if (a) {
+    const raw = parseFloat(a.state);
+    if (!Number.isNaN(raw)) parts.push(raw.toFixed(1).replace(".", ",") + " A");
+  }
+  return parts.join(" · ");
+}
+
 function solarSvg(stroke) {
   return `<g transform="translate(-19 -44) skewX(-8)">
     <rect x="0" y="0" width="38" height="26" rx="2" fill="none" stroke="${stroke}" stroke-width="2"/>
@@ -202,11 +217,12 @@ class EnergyFlowCard extends HTMLElement {
         : null;
       svgNodes += `
         <g transform="translate(${x} ${topY})" data-node="pv${i}" data-entity="${p.power || ""}">
-          <circle r="52" class="ring" stroke="${colors.pv}"/>
+          <circle r="58" class="ring" stroke="${colors.pv}"/>
           ${icon ? `<foreignObject x="-20" y="-64" width="40" height="40">${p.image ? `<img src="${p.image}" style="width:100%;height:100%;object-fit:contain"/>` : ""}</foreignObject>` : solarSvg(colors.pv)}
           <text y="4" class="lbl">${name}</text>
-          <text y="25" class="val" data-f="pv${i}-power">—</text>
-          <text y="42" class="sec" data-f="pv${i}-energy"></text>
+          <text y="22" class="val" data-f="pv${i}-power">—</text>
+          <text y="37" class="sec" data-f="pv${i}-energy"></text>
+          <text y="50" class="sec" data-f="pv${i}-va"></text>
         </g>`;
     });
 
@@ -352,6 +368,7 @@ class EnergyFlowCard extends HTMLElement {
       solarTotal += w;
       this._setText(`pv${i}-power`, formatPower(hass, p.power));
       this._setText(`pv${i}-energy`, formatEnergy(hass, p.energy_today));
+      this._setText(`pv${i}-va`, formatVoltageCurrent(hass, p.voltage, p.current));
       this._setFlow(`pv${i}`, w > THRESH);
     });
 
@@ -449,6 +466,31 @@ function efcTokens(id) {
     .map((t) => EFC_SYNONYMS[t] || t);
 }
 
+// Given a PV string's power entity (e.g. "sensor.inverter_pv1_power"),
+// look for its voltage/current sensors sharing the same string number
+// (e.g. "sensor.inverter_pv1_voltage"). Shared by autoDetectConfig and by
+// the visual editor's "on select a PV power entity" companion lookup.
+function detectPvVoltageCurrent(hass, powerEntityId) {
+  if (!hass || !hass.states || !powerEntityId) return {};
+  const states = hass.states;
+  const ids = Object.keys(states).filter((id) => id.startsWith("sensor."));
+  const pvRegex = /(pv|string|mppt)[_-]?(\d+)[_-]?(power|puissance)/i;
+  const m = powerEntityId.match(pvRegex);
+  if (!m) return {};
+  const prefix = m[1];
+  const n = m[2];
+  const find = (kindWords, unitTest) => {
+    const re = new RegExp(`${prefix}[_-]?${n}[_-]?(${kindWords})`, "i");
+    return ids.find(
+      (id) => re.test(id) && unitTest(((states[id].attributes || {}).unit_of_measurement) || "")
+    );
+  };
+  return {
+    voltage: find("voltage|tension", (u) => /^v$/i.test(u)),
+    current: find("current|courant", (u) => /^a$/i.test(u)),
+  };
+}
+
 function autoDetectConfig(hass) {
   const cfg = { type: "custom:energy-flow-card" };
   if (!hass || !hass.states) return cfg;
@@ -509,7 +551,10 @@ function autoDetectConfig(hass) {
         !(mustNotMatch && mustNotMatch.test(id))
     );
 
-  // Individual PV strings: anything matching pvN / stringN / mpptN + power
+  // Individual PV strings: anything matching pvN / stringN / mpptN + power.
+  // For the same string number, also look for its voltage/current sensors
+  // (e.g. PV1 power -> also search for a "pv1...voltage/tension" and
+  // "pv1...current/courant" sensor), so each line shows V/A alongside W.
   const pvRegex = /(pv|string|mppt)[_-]?(\d+)[_-]?(power|puissance)/i;
   const pvMatches = ids
     .filter((id) => pvRegex.test(id) && isPower(id))
@@ -519,6 +564,7 @@ function autoDetectConfig(hass) {
     power: id,
     name: `PV${n}`,
     energy_today: findEnergyToday(id),
+    ...detectPvVoltageCurrent(hass, id),
   }));
   if (pv.length) cfg.pv = pv;
 
@@ -639,6 +685,36 @@ class EnergyFlowCardEditor extends HTMLElement {
       ev.stopPropagation();
       setPath(this._config, path, ev.detail.value);
       this._emit();
+    });
+    wrap.appendChild(label);
+    wrap.appendChild(picker);
+    return wrap;
+  }
+
+  // Like _row, but for a PV string's power entity specifically: picking a
+  // new entity also searches for its voltage/current companions (same
+  // string number) and fills them in automatically if found.
+  _pvPowerRow(i) {
+    const path = `pv.${i}.power`;
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "display:flex; align-items:center; gap:8px; margin-bottom:6px;";
+    const label = document.createElement("div");
+    label.textContent = `PV${i + 1} puissance`;
+    label.style.cssText = "width:120px; font-size:.85rem; color:var(--secondary-text-color); flex-shrink:0;";
+    const picker = document.createElement("ha-entity-picker");
+    picker.hass = this._hass;
+    picker.value = getPath(this._config, path) || "";
+    picker.includeDomains = ["sensor"];
+    picker.style.flex = "1";
+    picker.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+      const value = ev.detail.value;
+      setPath(this._config, path, value);
+      const companions = detectPvVoltageCurrent(this._hass, value);
+      if (companions.voltage) setPath(this._config, `pv.${i}.voltage`, companions.voltage);
+      if (companions.current) setPath(this._config, `pv.${i}.current`, companions.current);
+      this._emit();
+      this._render();
     });
     wrap.appendChild(label);
     wrap.appendChild(picker);
@@ -832,7 +908,9 @@ utility_meter:
     pv.forEach((_, i) => {
       const line = document.createElement("div");
       line.style.cssText = "border-top:1px dashed var(--divider-color); padding-top:8px; margin-top:8px;";
-      line.appendChild(this._row(`PV${i + 1} puissance`, `pv.${i}.power`));
+      line.appendChild(this._pvPowerRow(i));
+      line.appendChild(this._row(`PV${i + 1} tension`, `pv.${i}.voltage`));
+      line.appendChild(this._row(`PV${i + 1} courant`, `pv.${i}.current`));
       line.appendChild(this._row(`PV${i + 1} énergie/j`, `pv.${i}.energy_today`));
       line.appendChild(this._textRow(`PV${i + 1} nom`, `pv.${i}.name`));
       const rm = document.createElement("mwc-button");
