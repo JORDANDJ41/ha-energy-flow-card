@@ -421,6 +421,34 @@ customElements.define("energy-flow-card", EnergyFlowCard);
 // device_classes. Always meant to be reviewed/corrected by the user before
 // saving (surfaced in the visual editor as a "Détecter automatiquement"
 // button that fills the form without saving on its own).
+const EFC_GENERIC_TOKENS = new Set([
+  "sensor", "inverter", "all", "house", "active", "power", "puissance",
+  "total", "sys", "the", "de", "la", "le", "du", "des",
+]);
+
+// A few FR/EN synonyms seen in the wild, normalized so e.g. a French
+// "ve_energie_jour" counter still matches an English "ev_charger_power".
+const EFC_SYNONYMS = {
+  ve: "ev",
+  vehicule: "ev",
+  voiture: "ev",
+  car: "ev",
+  borne: "charger",
+  batterie: "battery",
+  maison: "home",
+  reseau: "grid",
+  solaire: "solar",
+};
+
+function efcTokens(id) {
+  return id
+    .replace(/^sensor\./, "")
+    .toLowerCase()
+    .split(/[_.]+/)
+    .filter((t) => t && !EFC_GENERIC_TOKENS.has(t))
+    .map((t) => EFC_SYNONYMS[t] || t);
+}
+
 function autoDetectConfig(hass) {
   const cfg = { type: "custom:energy-flow-card" };
   if (!hass || !hass.states) return cfg;
@@ -431,27 +459,40 @@ function autoDetectConfig(hass) {
     const a = states[id].attributes || {};
     return (
       a.device_class === "power" ||
-      /(^|_)(kw|w)$/i.test(a.unit_of_measurement || "") ||
+      /^(w|kw|mw)$/i.test(a.unit_of_measurement || "") ||
       /power|puissance/i.test(id)
     );
   };
 
+  const isEnergyUnit = (id) => {
+    const u = ((states[id].attributes || {}).unit_of_measurement || "").toLowerCase();
+    return u === "wh" || u === "kwh" || u === "mwh";
+  };
+
+  // Plain substring patterns (no \b: real entity_ids are underscore-joined,
+  // so a leading \b never matches right after a prefix like "inverter_").
   const byPattern = (regexes) =>
     ids.find((id) => isPower(id) && regexes.some((r) => r.test(id)));
 
+  // Match a "today energy" sensor by requiring an energy unit (Wh/kWh/MWh)
+  // AND at least one shared distinctive token with the power entity's id
+  // (e.g. "pv1", "battery", "load") - prevents matching an unrelated
+  // generic "...today" sensor (such as a duration/minutes counter) just
+  // because it shares a common prefix like "inverter".
   const findEnergyToday = (powerId) => {
     if (!powerId) return undefined;
-    const base = powerId
-      .replace("sensor.", "")
-      .replace(/_?power.*$|_?puissance.*$/i, "");
-    const prefix = base.split("_")[0];
-    return ids.find(
-      (id) =>
-        id !== powerId &&
-        id.includes(prefix) &&
-        /(jour|today|day|daily)/i.test(id) &&
-        (states[id].attributes || {}).device_class !== "power"
-    );
+    const srcTokens = new Set(efcTokens(powerId));
+    if (!srcTokens.size) return undefined;
+    let best, bestScore = 0;
+    for (const id of ids) {
+      if (id === powerId || !isEnergyUnit(id)) continue;
+      const score = efcTokens(id).filter((t) => srcTokens.has(t)).length;
+      if (score > bestScore) {
+        bestScore = score;
+        best = id;
+      }
+    }
+    return best;
   };
 
   // Individual PV strings: anything matching pvN / stringN / mpptN + power
@@ -467,20 +508,30 @@ function autoDetectConfig(hass) {
   }));
   if (pv.length) cfg.pv = pv;
 
-  const solarPower = byPattern([/\bpv_power\b/i, /solar.*power/i, /production/i]);
+  const solarPower = byPattern([/pv_power/i, /solar.*power/i, /production/i]);
   if (solarPower || pv.length) {
-    cfg.solar = solarPower
-      ? { power: solarPower, energy_today: findEnergyToday(solarPower) }
-      : {};
+    let energyToday = findEnergyToday(solarPower);
+    if (!energyToday) {
+      // "pv_power" and "today_production" share no token by design (one is
+      // about the panels, the other about output) - fall back to any daily
+      // "production" energy sensor specifically for the combined total.
+      energyToday = ids.find(
+        (id) => /production/i.test(id) && /(today|jour|day|daily)/i.test(id) && isEnergyUnit(id)
+      );
+    }
+    cfg.solar = solarPower ? { power: solarPower, energy_today: energyToday } : {};
   }
 
   const batteryPower = byPattern([/battery.*power/i, /batterie.*puissance/i]);
   if (batteryPower) {
-    const soc = ids.find(
-      (id) =>
-        /batter(y|ie)/i.test(id) &&
-        (states[id].attributes || {}).unit_of_measurement === "%"
-    );
+    const soc =
+      ids.find((id) => (states[id].attributes || {}).device_class === "battery") ||
+      ids.find(
+        (id) =>
+          /batter(y|ie)/i.test(id) &&
+          !/objectif|cible|target|goal/i.test(id) &&
+          (states[id].attributes || {}).unit_of_measurement === "%"
+      );
     cfg.battery = {
       power: batteryPower,
       soc,
@@ -488,12 +539,12 @@ function autoDetectConfig(hass) {
     };
   }
 
-  const homePower = byPattern([/load.*sys/i, /\bhome.*power/i, /\bload_power\b/i, /maison.*puissance/i]);
+  const homePower = byPattern([/load.*sys/i, /home.*power/i, /load_power/i, /maison.*puissance/i]);
   if (homePower) {
     cfg.home = { power: homePower, energy_today: findEnergyToday(homePower) };
   }
 
-  const gridPower = byPattern([/\bgrid.*power/i, /pcc.*total/i, /reseau.*puissance/i]);
+  const gridPower = byPattern([/grid.*power/i, /pcc.*total/i, /reseau.*puissance/i]);
   if (gridPower) {
     cfg.grid = { power: gridPower };
   }
