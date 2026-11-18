@@ -33,8 +33,8 @@ title: Énergie
 solar:
   power: sensor.inverter_pv_power        # puissance instantanée totale
   energy_today: sensor.inverter_today_production
-  name: Solaire
   icon: mdi:white-balance-sunny          # ou image: /local/mon_logo.png
+  sum_pv: false                          # true = ignore "power" et utilise la somme des lignes PV ci-dessous (utile si le total de l'onduleur ne correspond pas à PV1+PV2+...)
 pv:
   - power: sensor.inverter_pv1_power
     voltage: sensor.inverter_pv1_voltage    # optionnel, affiché en petit à côté de la puissance
@@ -89,8 +89,10 @@ car:
 | `energy_today_charge` / `energy_today_discharge` (battery) | Compteurs séparés charge/décharge du jour |
 | `energy_today_buy` / `energy_today_sell` (grid) | Compteurs séparés achat/vente du jour |
 | `voltage` / `current` (pv) | Tension (V) et courant (A) de la ligne, affichés en petit sous l'énergie du jour — détectés automatiquement par numéro de ligne (PV1 cherche aussi une tension/courant "...pv1...") |
-| `voltage` / `current` / `temperature` / `soh` (battery) | Valeurs optionnelles affichées en petit — aucune n'est obligatoire, ne configurez que ce que vous voulez voir |
-| `voltage` / `frequency` (grid) | Valeurs optionnelles affichées en petit |
+| `capacity_kwh` (battery) | Capacité utile saisie à la main (kWh) — combinée au SOC%, calcule l'énergie actuellement disponible dans la batterie |
+| `voltage` / `current` / `temperature` / `soh` (battery) | Valeurs optionnelles affichées en petit — non proposées par la détection automatique (pour ne pas surcharger le rond), à ajouter à la main si vous les voulez |
+| `voltage` / `frequency` (grid) | Valeurs optionnelles affichées en petit — `frequency` n'est pas proposée par la détection automatique |
+| `sum_pv` (solar) | `true` = ignore `power` et affiche la somme des lignes PV à la place |
 | `connected` (grid) | `binary_sensor` optionnel — l'anneau du nœud Réseau clignote en rouge si son état passe à "off" |
 | `charging` (car) | `binary_sensor` explicite pour l'état de charge (sinon déduit de `power`) |
 
