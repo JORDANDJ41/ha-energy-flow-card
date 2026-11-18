@@ -52,6 +52,10 @@ battery:
   soc: sensor.inverter_battery
   energy_today_charge: sensor.inverter_today_battery_charge
   energy_today_discharge: sensor.inverter_today_battery_discharge
+  voltage: sensor.inverter_battery_voltage      # optionnel
+  current: sensor.inverter_battery_current      # optionnel
+  temperature: sensor.inverter_battery_temperature  # optionnel
+  soh: sensor.inverter_battery_soh              # optionnel, santé de la batterie en %
   invert_power: false                    # true si votre capteur utilise la convention inverse
 home:
   power: sensor.inverter_activepower_load_sys
@@ -60,6 +64,9 @@ grid:
   power: sensor.inverter_activepower_pcc_total  # positif = achat, négatif = vente
   energy_today_buy: sensor.inverter_today_energy_import
   energy_today_sell: sensor.inverter_today_energy_export
+  voltage: sensor.inverter_voltage_phase_r      # optionnel
+  frequency: sensor.inverter_grid_frequency     # optionnel
+  connected: binary_sensor.sunsynk_grid_connected_status  # optionnel, anneau rouge clignotant si "off"
   invert_power: false
 car:
   power: sensor.vevor_ev_charger_puissance
@@ -82,6 +89,9 @@ car:
 | `energy_today_charge` / `energy_today_discharge` (battery) | Compteurs séparés charge/décharge du jour |
 | `energy_today_buy` / `energy_today_sell` (grid) | Compteurs séparés achat/vente du jour |
 | `voltage` / `current` (pv) | Tension (V) et courant (A) de la ligne, affichés en petit sous l'énergie du jour — détectés automatiquement par numéro de ligne (PV1 cherche aussi une tension/courant "...pv1...") |
+| `voltage` / `current` / `temperature` / `soh` (battery) | Valeurs optionnelles affichées en petit — aucune n'est obligatoire, ne configurez que ce que vous voulez voir |
+| `voltage` / `frequency` (grid) | Valeurs optionnelles affichées en petit |
+| `connected` (grid) | `binary_sensor` optionnel — l'anneau du nœud Réseau clignote en rouge si son état passe à "off" |
 | `charging` (car) | `binary_sensor` explicite pour l'état de charge (sinon déduit de `power`) |
 
 Cliquer sur un nœud ouvre la fenêtre "plus d'infos" de son entité `power`.

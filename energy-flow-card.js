@@ -78,6 +78,20 @@ function formatVoltageCurrent(hass, voltageId, currentId) {
   return parts.join(" · ");
 }
 
+// Joins whichever of [entityId, suffix] pairs resolve to a numeric state,
+// e.g. formatExtraLine(hass, [[voltageId,"V",0],[freqId,"Hz",1]]) -> "230 V · 50,0 Hz"
+function formatExtraLine(hass, pairs) {
+  const parts = [];
+  pairs.forEach(([entityId, suffix, decimals]) => {
+    const st = getState(hass, entityId);
+    if (!st) return;
+    const raw = parseFloat(st.state);
+    if (Number.isNaN(raw)) return;
+    parts.push(raw.toFixed(decimals != null ? decimals : 0).replace(".", ",") + " " + suffix);
+  });
+  return parts.join(" · ");
+}
+
 function solarSvg(stroke) {
   return `<g transform="translate(-19 -44) skewX(-8)">
     <rect x="0" y="0" width="38" height="26" rx="2" fill="none" stroke="${stroke}" stroke-width="2"/>
@@ -178,6 +192,8 @@ class EnergyFlowCard extends HTMLElement {
         .sec { font-size:10.5px; fill: var(--secondary-text-color); text-anchor:middle; font-variant-numeric: tabular-nums; }
         .ring { fill: var(--card-background-color, #1b2340); stroke-width:2.5; cursor:pointer; }
         .ring:hover { filter: brightness(1.15); }
+        .ring.alert-ring { stroke: #ef4444 !important; animation: efc-pulse 1.4s ease-in-out infinite; }
+        @keyframes efc-pulse { 50% { opacity: .55; } }
         .flow { stroke-width:2.5; fill:none; opacity:.4; }
         .flow-dash { stroke-width:2.5; fill:none; stroke-dasharray:6 10; opacity:0; transition: opacity .3s; }
         .flow-dash.on { opacity:1; animation: efc-dash 1.3s linear infinite; }
@@ -252,11 +268,12 @@ class EnergyFlowCard extends HTMLElement {
     if (this._config.battery) {
       svgNodes += `
         <g transform="translate(150 ${midY})" data-node="battery" data-entity="${this._config.battery.power || ""}">
-          <circle r="54" class="ring" stroke="${colors.battery}"/>
-          <foreignObject x="-18" y="-48" width="36" height="36"><ha-icon icon="${this._config.battery.icon || DEFAULT_ICONS.battery}" style="--mdc-icon-size:28px;color:${colors.battery}"></ha-icon></foreignObject>
-          <text y="-19" class="lbl" data-f="battery-label">${this._config.battery.name || "Batterie"}</text>
-          <text y="4" class="val" data-f="battery-power">—</text>
-          <text y="23" class="sec" data-f="battery-energy"></text>
+          <circle r="60" class="ring" stroke="${colors.battery}" data-ring="battery"/>
+          <foreignObject x="-18" y="-54" width="36" height="36"><ha-icon icon="${this._config.battery.icon || DEFAULT_ICONS.battery}" style="--mdc-icon-size:28px;color:${colors.battery}"></ha-icon></foreignObject>
+          <text y="-25" class="lbl" data-f="battery-label">${this._config.battery.name || "Batterie"}</text>
+          <text y="0" class="val" data-f="battery-power">—</text>
+          <text y="17" class="sec" data-f="battery-energy"></text>
+          <text y="31" class="sec" data-f="battery-extra"></text>
         </g>`;
       svgFlows += `
         <path class="flow" stroke="${colors.battery}" opacity=".25" d="M195 ${midY + 25} C 245 ${midY + 35}, 275 ${midY + 15}, 295 ${midY - 5}"/>
@@ -279,11 +296,12 @@ class EnergyFlowCard extends HTMLElement {
     if (this._config.grid) {
       svgNodes += `
         <g transform="translate(490 ${midY + 15}) " data-node="grid" data-entity="${this._config.grid.power || ""}">
-          <circle r="54" class="ring" stroke="${colors.grid}"/>
-          <foreignObject x="-18" y="-48" width="36" height="36"><ha-icon icon="${this._config.grid.icon || DEFAULT_ICONS.grid}" style="--mdc-icon-size:28px;color:${colors.grid}"></ha-icon></foreignObject>
-          <text y="-19" class="lbl">${this._config.grid.name || "Réseau"}</text>
-          <text y="4" class="val" data-f="grid-power">—</text>
-          <text y="23" class="sec" data-f="grid-energy"></text>
+          <circle r="60" class="ring" stroke="${colors.grid}" data-ring="grid"/>
+          <foreignObject x="-18" y="-54" width="36" height="36"><ha-icon icon="${this._config.grid.icon || DEFAULT_ICONS.grid}" style="--mdc-icon-size:28px;color:${colors.grid}"></ha-icon></foreignObject>
+          <text y="-25" class="lbl">${this._config.grid.name || "Réseau"}</text>
+          <text y="0" class="val" data-f="grid-power">—</text>
+          <text y="17" class="sec" data-f="grid-energy"></text>
+          <text y="31" class="sec" data-f="grid-extra"></text>
         </g>`;
       svgFlows += `
         <path class="flow" stroke="${colors.grid}" d="M485 ${midY + 15} C 420 ${midY + 10}, 370 ${midY}, 348 ${midY}"/>
@@ -398,6 +416,15 @@ class EnergyFlowCard extends HTMLElement {
       );
       this._setFlow("solar-battery", charging);
       this._setFlow("battery-home", discharging);
+      this._setText(
+        "battery-extra",
+        formatExtraLine(hass, [
+          [cfg.battery.voltage, "V", 0],
+          [cfg.battery.current, "A", 1],
+          [cfg.battery.temperature, "°C", 0],
+          [cfg.battery.soh, "% santé", 0],
+        ])
+      );
     }
 
     if (cfg.home) {
@@ -417,6 +444,20 @@ class EnergyFlowCard extends HTMLElement {
           : formatEnergy(hass, cfg.grid.energy_today_sell)
       );
       this._setFlow("grid-home", importing, false);
+      this._setText(
+        "grid-extra",
+        formatExtraLine(hass, [
+          [cfg.grid.voltage, "V", 0],
+          [cfg.grid.frequency, "Hz", 1],
+        ])
+      );
+      const ring = this.querySelector('[data-ring="grid"]');
+      if (ring) {
+        const disconnected = cfg.grid.connected && hass.states[cfg.grid.connected]
+          ? hass.states[cfg.grid.connected].state === "off"
+          : false;
+        ring.classList.toggle("alert-ring", disconnected);
+      }
     }
 
     if (cfg.car) {
@@ -551,6 +592,18 @@ function autoDetectConfig(hass) {
         !(mustNotMatch && mustNotMatch.test(id))
     );
 
+  // For instantaneous "extra" readings (voltage, current, temperature,
+  // frequency, state-of-health, connectivity) that belong to a specific
+  // domain (battery, grid, ...): a keyword + the expected unit is enough,
+  // no "today" wording required since these aren't daily counters.
+  const findByUnit = (mustMatch, unitTest, mustNotMatch) =>
+    ids.find(
+      (id) =>
+        mustMatch.test(id) &&
+        !(mustNotMatch && mustNotMatch.test(id)) &&
+        unitTest(((states[id].attributes || {}).unit_of_measurement) || "")
+    );
+
   // Individual PV strings: anything matching pvN / stringN / mpptN + power.
   // For the same string number, also look for its voltage/current sensors
   // (e.g. PV1 power -> also search for a "pv1...voltage/tension" and
@@ -590,6 +643,10 @@ function autoDetectConfig(hass) {
       energy_today_charge:
         findDailyByKeyword(/charge/i, /discharge|decharge/i) || findEnergyToday(batteryPower),
       energy_today_discharge: findDailyByKeyword(/discharge|decharge/i),
+      voltage: findByUnit(/batter(y|ie)/i, (u) => /^v$/i.test(u)),
+      current: findByUnit(/batter(y|ie)/i, (u) => /^a$/i.test(u)),
+      temperature: findByUnit(/batter(y|ie)/i, (u) => /°?c$/i.test(u)),
+      soh: findByUnit(/batter(y|ie).*(soh|health|sante)/i, (u) => u === "%"),
     };
   }
 
@@ -604,6 +661,11 @@ function autoDetectConfig(hass) {
       power: gridPower,
       energy_today_buy: findDailyByKeyword(/import|buy|achat/i, /export|sell|vente/i),
       energy_today_sell: findDailyByKeyword(/export|sell|vente/i, /import|buy|achat/i),
+      voltage: findByUnit(/grid|reseau|phase/i, (u) => /^v$/i.test(u)),
+      frequency: findByUnit(/grid|reseau|frequency|frequence/i, (u) => /^hz$/i.test(u)),
+      connected: Object.keys(states).find(
+        (id) => id.startsWith("binary_sensor.") && /grid.*connect|reseau.*connect/i.test(id)
+      ),
     };
   }
 
@@ -939,6 +1001,10 @@ utility_meter:
         this._row("État de charge (%)", "battery.soc"),
         this._row("Énergie chargée/j", "battery.energy_today_charge"),
         this._row("Énergie déchargée/j", "battery.energy_today_discharge"),
+        this._row("Tension (optionnel)", "battery.voltage"),
+        this._row("Courant (optionnel)", "battery.current"),
+        this._row("Température (optionnel)", "battery.temperature"),
+        this._row("Santé / SOH % (optionnel)", "battery.soh"),
       ])
     );
 
@@ -954,6 +1020,9 @@ utility_meter:
         this._row("Puissance", "grid.power"),
         this._row("Énergie achetée/j", "grid.energy_today_buy"),
         this._row("Énergie vendue/j", "grid.energy_today_sell"),
+        this._row("Tension (optionnel)", "grid.voltage"),
+        this._row("Fréquence (optionnel)", "grid.frequency"),
+        this._row("Capteur \"réseau connecté\" (optionnel)", "grid.connected", "", ["binary_sensor"]),
       ])
     );
 
