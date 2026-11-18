@@ -32,16 +32,20 @@ function numState(hass, entityId) {
 // Format an instantaneous power value, auto-choosing W / kW based on the
 // entity's own unit_of_measurement (so it works whether the source sensor
 // already reports in W or kW).
+function formatWatts(watts) {
+  const abs = Math.abs(watts);
+  if (abs >= 1000) return (watts / 1000).toFixed(2).replace(".", ",") + " kW";
+  return Math.round(watts) + " W";
+}
+
 function formatPower(hass, entityId) {
   const st = getState(hass, entityId);
   if (!st) return "—";
   const raw = parseFloat(st.state);
   if (Number.isNaN(raw)) return "—";
   const unit = (st.attributes && st.attributes.unit_of_measurement) || "W";
-  let watts = unit.toLowerCase().startsWith("k") ? raw * 1000 : raw;
-  const abs = Math.abs(watts);
-  if (abs >= 1000) return (watts / 1000).toFixed(2).replace(".", ",") + " kW";
-  return Math.round(watts) + " W";
+  const watts = unit.toLowerCase().startsWith("k") ? raw * 1000 : raw;
+  return formatWatts(watts);
 }
 
 function rawWatts(hass, entityId) {
@@ -176,10 +180,10 @@ class EnergyFlowCard extends HTMLElement {
       for (let i = 0; i < n; i++) pvSpots.push(start + (span * i) / (n - 1));
     }
     const topY = 95;
-    const solarY = n > 0 ? 205 : 140;
-    const midY = solarY + 120;
-    const carY = this._config.car ? midY + 140 : null;
-    const totalH = (carY || midY) + 110;
+    const solarY = n > 0 ? 215 : 150;
+    const midY = solarY + 165;
+    const carY = this._config.car ? midY + 150 : null;
+    const totalH = (carY || midY) + 120;
 
     const style = `
       <style>
@@ -233,25 +237,24 @@ class EnergyFlowCard extends HTMLElement {
         : null;
       svgNodes += `
         <g transform="translate(${x} ${topY})" data-node="pv${i}" data-entity="${p.power || ""}">
-          <circle r="58" class="ring" stroke="${colors.pv}"/>
+          <circle r="68" class="ring" stroke="${colors.pv}"/>
           ${icon ? `<foreignObject x="-20" y="-64" width="40" height="40">${p.image ? `<img src="${p.image}" style="width:100%;height:100%;object-fit:contain"/>` : ""}</foreignObject>` : solarSvg(colors.pv)}
           <text y="4" class="lbl">${name}</text>
-          <text y="22" class="val" data-f="pv${i}-power">—</text>
-          <text y="37" class="sec" data-f="pv${i}-energy"></text>
-          <text y="50" class="sec" data-f="pv${i}-va"></text>
+          <text y="24" class="val" data-f="pv${i}-power">—</text>
+          <text y="41" class="sec" data-f="pv${i}-energy"></text>
+          <text y="55" class="sec" data-f="pv${i}-va"></text>
         </g>`;
     });
 
-    // Solar node
+    // Solar node (icon only - no name label, it's the one merging everything)
     if (this._config.solar) {
       const s = this._config.solar;
       svgNodes += `
         <g transform="translate(320 ${solarY})" data-node="solar" data-entity="${s.power || ""}">
-          <circle r="56" class="ring" stroke="${colors.solar}" stroke-width="3"/>
-          <foreignObject x="-18" y="-50" width="36" height="36"><ha-icon icon="${s.icon || DEFAULT_ICONS.solar}" style="--mdc-icon-size:30px;color:${colors.solar}"></ha-icon></foreignObject>
-          <text y="-18" class="lbl">${s.name || "Solaire"}</text>
-          <text y="6" class="val" data-f="solar-power">—</text>
-          <text y="25" class="sec" data-f="solar-energy"></text>
+          <circle r="66" class="ring" stroke="${colors.solar}" stroke-width="3"/>
+          <foreignObject x="-20" y="-56" width="40" height="40"><ha-icon icon="${s.icon || DEFAULT_ICONS.solar}" style="--mdc-icon-size:32px;color:${colors.solar}"></ha-icon></foreignObject>
+          <text y="2" class="val" data-f="solar-power">—</text>
+          <text y="21" class="sec" data-f="solar-energy"></text>
         </g>`;
       // solar -> home
       svgFlows += `
@@ -264,44 +267,42 @@ class EnergyFlowCard extends HTMLElement {
       }
     }
 
-    // Battery
+    // Battery (label slot shows SOC% only, not the "Batterie" name)
     if (this._config.battery) {
       svgNodes += `
         <g transform="translate(150 ${midY})" data-node="battery" data-entity="${this._config.battery.power || ""}">
-          <circle r="64" class="ring" stroke="${colors.battery}" data-ring="battery"/>
-          <foreignObject x="-18" y="-58" width="36" height="36"><ha-icon icon="${this._config.battery.icon || DEFAULT_ICONS.battery}" style="--mdc-icon-size:28px;color:${colors.battery}"></ha-icon></foreignObject>
-          <text y="-28" class="lbl" data-f="battery-label">${this._config.battery.name || "Batterie"}</text>
-          <text y="-5" class="val" data-f="battery-power">—</text>
-          <text y="12" class="sec" data-f="battery-energy"></text>
-          <text y="26" class="sec" data-f="battery-stored"></text>
-          <text y="40" class="sec" data-f="battery-extra"></text>
+          <circle r="74" class="ring" stroke="${colors.battery}" data-ring="battery"/>
+          <foreignObject x="-20" y="-64" width="40" height="40"><ha-icon icon="${this._config.battery.icon || DEFAULT_ICONS.battery}" style="--mdc-icon-size:32px;color:${colors.battery}"></ha-icon></foreignObject>
+          <text y="-28" class="lbl" data-f="battery-label"></text>
+          <text y="-6" class="val" data-f="battery-power">—</text>
+          <text y="13" class="sec" data-f="battery-energy"></text>
+          <text y="28" class="sec" data-f="battery-stored"></text>
+          <text y="43" class="sec" data-f="battery-extra"></text>
         </g>`;
       svgFlows += `
         <path class="flow" stroke="${colors.battery}" opacity=".25" d="M195 ${midY + 25} C 245 ${midY + 35}, 275 ${midY + 15}, 295 ${midY - 5}"/>
         <path class="flow-dash rev" data-flow="battery-home" stroke="${colors.battery}" d="M195 ${midY + 25} C 245 ${midY + 35}, 275 ${midY + 15}, 295 ${midY - 5}"/>`;
     }
 
-    // Home
+    // Home (icon only, no name label)
     if (this._config.home) {
       svgNodes += `
         <g transform="translate(320 ${midY})" data-node="home" data-entity="${this._config.home.power || ""}">
-          <circle r="56" class="ring" stroke="${colors.home}" stroke-width="3"/>
-          <foreignObject x="-18" y="-50" width="36" height="36"><ha-icon icon="${this._config.home.icon || DEFAULT_ICONS.home}" style="--mdc-icon-size:30px;color:${colors.home}"></ha-icon></foreignObject>
-          <text y="-20" class="lbl">${this._config.home.name || "Maison"}</text>
-          <text y="4" class="val" data-f="home-power">—</text>
-          <text y="23" class="sec" data-f="home-energy"></text>
+          <circle r="66" class="ring" stroke="${colors.home}" stroke-width="3"/>
+          <foreignObject x="-20" y="-56" width="40" height="40"><ha-icon icon="${this._config.home.icon || DEFAULT_ICONS.home}" style="--mdc-icon-size:32px;color:${colors.home}"></ha-icon></foreignObject>
+          <text y="2" class="val" data-f="home-power">—</text>
+          <text y="21" class="sec" data-f="home-energy"></text>
         </g>`;
     }
 
-    // Grid
+    // Grid (icon only, no name label)
     if (this._config.grid) {
       svgNodes += `
         <g transform="translate(490 ${midY + 15}) " data-node="grid" data-entity="${this._config.grid.power || ""}">
-          <circle r="60" class="ring" stroke="${colors.grid}" data-ring="grid"/>
-          <foreignObject x="-18" y="-54" width="36" height="36"><ha-icon icon="${this._config.grid.icon || DEFAULT_ICONS.grid}" style="--mdc-icon-size:28px;color:${colors.grid}"></ha-icon></foreignObject>
-          <text y="-25" class="lbl">${this._config.grid.name || "Réseau"}</text>
-          <text y="0" class="val" data-f="grid-power">—</text>
-          <text y="17" class="sec" data-f="grid-energy"></text>
+          <circle r="70" class="ring" stroke="${colors.grid}" data-ring="grid"/>
+          <foreignObject x="-20" y="-60" width="40" height="40"><ha-icon icon="${this._config.grid.icon || DEFAULT_ICONS.grid}" style="--mdc-icon-size:32px;color:${colors.grid}"></ha-icon></foreignObject>
+          <text y="-2" class="val" data-f="grid-power">—</text>
+          <text y="16" class="sec" data-f="grid-energy"></text>
           <text y="31" class="sec" data-f="grid-extra"></text>
         </g>`;
       svgFlows += `
@@ -309,15 +310,14 @@ class EnergyFlowCard extends HTMLElement {
         <path class="flow-dash" data-flow="grid-home" stroke="${colors.grid}" d="M485 ${midY + 15} C 420 ${midY + 10}, 370 ${midY}, 348 ${midY}"/>`;
     }
 
-    // Car
+    // Car (icon only, no name label)
     if (this._config.car) {
       svgNodes += `
         <g transform="translate(320 ${carY})" data-node="car" data-entity="${this._config.car.power || ""}">
-          <circle r="54" class="ring" stroke="${colors.car}" stroke-width="3"/>
-          <foreignObject x="-18" y="-48" width="36" height="36"><ha-icon icon="${this._config.car.icon || DEFAULT_ICONS.car}" style="--mdc-icon-size:28px;color:${colors.car}"></ha-icon></foreignObject>
-          <text y="-19" class="lbl">${this._config.car.name || "Voiture"}</text>
-          <text y="4" class="val" data-f="car-power">—</text>
-          <text y="23" class="sec" data-f="car-energy"></text>
+          <circle r="64" class="ring" stroke="${colors.car}" stroke-width="3"/>
+          <foreignObject x="-20" y="-54" width="40" height="40"><ha-icon icon="${this._config.car.icon || DEFAULT_ICONS.car}" style="--mdc-icon-size:32px;color:${colors.car}"></ha-icon></foreignObject>
+          <text y="2" class="val" data-f="car-power">—</text>
+          <text y="21" class="sec" data-f="car-energy"></text>
         </g>`;
       svgFlows += `
         <path class="flow" stroke="${colors.car}" d="M320 ${midY + 48} L 320 ${carY - 48}"/>
@@ -392,9 +392,12 @@ class EnergyFlowCard extends HTMLElement {
     });
 
     if (cfg.solar) {
-      const entity = cfg.solar.power;
-      const w = entity ? rawWatts(hass, entity) : solarTotal;
-      this._setText("solar-power", entity ? formatPower(hass, entity) : `${Math.round(solarTotal)} W`);
+      // sum_pv: ignore the inverter's own combined sensor and use the sum
+      // of all configured PV strings instead (useful when the inverter's
+      // total doesn't match PV1+PV2+... due to a reporting offset/bug).
+      const useSum = cfg.solar.sum_pv || !cfg.solar.power;
+      const w = useSum ? solarTotal : rawWatts(hass, cfg.solar.power);
+      this._setText("solar-power", useSum ? formatWatts(solarTotal) : formatPower(hass, cfg.solar.power));
       this._setText("solar-energy", formatEnergy(hass, cfg.solar.energy_today));
       this._setFlow("solar-home", w > THRESH);
       if (cfg.battery) this._setFlow("solar-battery", w > THRESH);
@@ -404,8 +407,7 @@ class EnergyFlowCard extends HTMLElement {
       let w = rawWatts(hass, cfg.battery.power);
       if (cfg.battery.invert_power) w = -w;
       const soc = cfg.battery.soc ? numState(hass, cfg.battery.soc) : null;
-      const label = (cfg.battery.name || "Batterie") + (soc !== null && !Number.isNaN(soc) ? ` ${Math.round(soc)}%` : "");
-      this._setText("battery-label", label);
+      this._setText("battery-label", soc !== null && !Number.isNaN(soc) ? `${Math.round(soc)}%` : "");
       this._setText("battery-power", formatPower(hass, cfg.battery.power));
       const charging = w > THRESH;
       const discharging = w < -THRESH;
@@ -675,12 +677,9 @@ function autoDetectConfig(hass) {
           /(today|jour|day|daily)/i.test(id) &&
           /discharge|decharge/i.test(id)
       ),
-      voltage: ids.find((id) => scoped(id) && /batter(y|ie)/i.test(id) && /^v$/i.test(unitOf(id))),
-      current: ids.find((id) => scoped(id) && /batter(y|ie)/i.test(id) && /^a$/i.test(unitOf(id))),
-      temperature: ids.find((id) => scoped(id) && /batter(y|ie)/i.test(id) && /°?c$/i.test(unitOf(id))),
-      soh: ids.find(
-        (id) => scoped(id) && /batter(y|ie).*(soh|health|sante)/i.test(id) && unitOf(id) === "%"
-      ),
+      // voltage/current/temperature/soh are NOT auto-detected (opt-in only,
+      // from the editor) - they add clutter most people don't want to see
+      // by default; manual config still works if someone wants them.
     };
   }
 
@@ -696,7 +695,7 @@ function autoDetectConfig(hass) {
       energy_today_buy: findDailyByKeyword(/import|buy|achat/i, /export|sell|vente/i),
       energy_today_sell: findDailyByKeyword(/export|sell|vente/i, /import|buy|achat/i),
       voltage: findByUnit(/grid|reseau|phase/i, (u) => /^v$/i.test(u)),
-      frequency: findByUnit(/grid|reseau|frequency|frequence/i, (u) => /^hz$/i.test(u)),
+      // frequency is NOT auto-detected (opt-in only, from the editor).
       connected: Object.keys(states).find(
         (id) => id.startsWith("binary_sensor.") && /grid.*connect|reseau.*connect/i.test(id)
       ),
@@ -854,6 +853,24 @@ class EnergyFlowCardEditor extends HTMLElement {
     });
     wrap.appendChild(label);
     wrap.appendChild(input);
+    return wrap;
+  }
+
+  _checkboxRow(labelText, path) {
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "margin-bottom:6px;";
+    const label = document.createElement("label");
+    label.style.cssText = "font-size:.85rem; color:var(--secondary-text-color); display:flex; align-items:center; gap:8px; cursor:pointer;";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = !!getPath(this._config, path);
+    input.addEventListener("change", (ev) => {
+      setPath(this._config, path, ev.target.checked ? true : undefined);
+      this._emit();
+    });
+    label.appendChild(input);
+    label.appendChild(document.createTextNode(labelText));
+    wrap.appendChild(label);
     return wrap;
   }
 
@@ -1018,6 +1035,7 @@ utility_meter:
       this._section("Solaire (total)", [
         this._row("Puissance", "solar.power"),
         this._row("Énergie du jour", "solar.energy_today"),
+        this._checkboxRow("Utiliser la somme des lignes PV au lieu du capteur ci-dessus (utile si votre onduleur affiche un total qui ne correspond pas à PV1+PV2+...)", "solar.sum_pv"),
       ])
     );
 
