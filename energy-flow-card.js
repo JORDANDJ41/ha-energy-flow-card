@@ -9,7 +9,7 @@
  * License: MIT
  */
 
-const CARD_VERSION = "1.2.0";
+const CARD_VERSION = "1.2.1";
 
 // ---------- helpers ----------
 
