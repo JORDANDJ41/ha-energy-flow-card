@@ -677,9 +677,12 @@ function autoDetectConfig(hass) {
           /(today|jour|day|daily)/i.test(id) &&
           /discharge|decharge/i.test(id)
       ),
-      // voltage/current/temperature/soh are NOT auto-detected (opt-in only,
-      // from the editor) - they add clutter most people don't want to see
-      // by default; manual config still works if someone wants them.
+      voltage: ids.find((id) => scoped(id) && /batter(y|ie)/i.test(id) && /^v$/i.test(unitOf(id))),
+      current: ids.find((id) => scoped(id) && /batter(y|ie)/i.test(id) && /^a$/i.test(unitOf(id))),
+      temperature: ids.find((id) => scoped(id) && /batter(y|ie)/i.test(id) && /°?c$/i.test(unitOf(id))),
+      soh: ids.find(
+        (id) => scoped(id) && /batter(y|ie).*(soh|health|sante)/i.test(id) && unitOf(id) === "%"
+      ),
     };
   }
 
@@ -695,9 +698,11 @@ function autoDetectConfig(hass) {
       energy_today_buy: findDailyByKeyword(/import|buy|achat/i, /export|sell|vente/i),
       energy_today_sell: findDailyByKeyword(/export|sell|vente/i, /import|buy|achat/i),
       voltage: findByUnit(/grid|reseau|phase/i, (u) => /^v$/i.test(u)),
-      // frequency is NOT auto-detected (opt-in only, from the editor).
+      frequency: findByUnit(/grid|reseau|frequency|frequence/i, (u) => /^hz$/i.test(u)),
       connected: Object.keys(states).find(
-        (id) => id.startsWith("binary_sensor.") && /grid.*connect|reseau.*connect/i.test(id)
+        (id) =>
+          id.startsWith("binary_sensor.") &&
+          /grid.*connect|reseau.*connect|inverter.*connect|onduleur.*connect/i.test(id)
       ),
     };
   }

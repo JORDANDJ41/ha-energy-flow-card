@@ -90,8 +90,8 @@ car:
 | `energy_today_buy` / `energy_today_sell` (grid) | Compteurs séparés achat/vente du jour |
 | `voltage` / `current` (pv) | Tension (V) et courant (A) de la ligne, affichés en petit sous l'énergie du jour — détectés automatiquement par numéro de ligne (PV1 cherche aussi une tension/courant "...pv1...") |
 | `capacity_kwh` (battery) | Capacité utile saisie à la main (kWh) — combinée au SOC%, calcule l'énergie actuellement disponible dans la batterie |
-| `voltage` / `current` / `temperature` / `soh` (battery) | Valeurs optionnelles affichées en petit — non proposées par la détection automatique (pour ne pas surcharger le rond), à ajouter à la main si vous les voulez |
-| `voltage` / `frequency` (grid) | Valeurs optionnelles affichées en petit — `frequency` n'est pas proposée par la détection automatique |
+| `voltage` / `current` / `temperature` / `soh` (battery) | Valeurs optionnelles affichées en petit — proposées par la détection automatique, supprimez celles que vous ne voulez pas voir |
+| `voltage` / `frequency` (grid) | Valeurs optionnelles affichées en petit |
 | `sum_pv` (solar) | `true` = ignore `power` et affiche la somme des lignes PV à la place |
 | `connected` (grid) | `binary_sensor` optionnel — l'anneau du nœud Réseau clignote en rouge si son état passe à "off" |
 | `charging` (car) | `binary_sensor` explicite pour l'état de charge (sinon déduit de `power`) |
