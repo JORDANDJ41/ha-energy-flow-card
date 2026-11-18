@@ -128,7 +128,21 @@ class EnergyFlowCard extends HTMLElement {
   }
 
   getCardSize() {
-    return 5;
+    return 8;
+  }
+
+  // Sections dashboards (the grid layout with resize handles) size new
+  // cards from this instead of getCardSize - without it the card starts
+  // tiny and can't be dragged bigger. These are defaults, not limits: the
+  // user can still resize freely between grid_min_* and grid_max_*.
+  getLayoutOptions() {
+    return {
+      grid_columns: 6,
+      grid_rows: 8,
+      grid_min_columns: 4,
+      grid_min_rows: 6,
+      grid_max_columns: 12,
+    };
   }
 
   static getStubConfig(hass) {
@@ -180,10 +194,10 @@ class EnergyFlowCard extends HTMLElement {
       for (let i = 0; i < n; i++) pvSpots.push(start + (span * i) / (n - 1));
     }
     const topY = 95;
-    const solarY = n > 0 ? 215 : 150;
-    const midY = solarY + 165;
-    const carY = this._config.car ? midY + 150 : null;
-    const totalH = (carY || midY) + 120;
+    const solarY = n > 0 ? 240 : 150;
+    const midY = solarY + 180;
+    const carY = this._config.car ? midY + 170 : null;
+    const totalH = (carY || midY) + 130;
 
     const style = `
       <style>
@@ -229,8 +243,8 @@ class EnergyFlowCard extends HTMLElement {
     pv.forEach((p, i) => {
       const x = pvSpots[i];
       svgFlows += `
-        <path class="flow" stroke="${colors.pv}" d="M${x} ${topY + 35} C ${x} ${topY + 90}, 320 ${solarY - 60}, 320 ${solarY - 42}"/>
-        <path class="flow-dash" data-flow="pv${i}" stroke="${colors.pv}" d="M${x} ${topY + 35} C ${x} ${topY + 90}, 320 ${solarY - 60}, 320 ${solarY - 42}"/>`;
+        <path class="flow" stroke="${colors.pv}" d="M${x} ${topY + 80} C ${x} ${topY + 130}, 320 ${solarY - 120}, 320 ${solarY - 78}"/>
+        <path class="flow-dash" data-flow="pv${i}" stroke="${colors.pv}" d="M${x} ${topY + 80} C ${x} ${topY + 130}, 320 ${solarY - 120}, 320 ${solarY - 78}"/>`;
       const name = (p.name || `PV${i + 1}`);
       const icon = p.image
         ? `<img x="-17" y="-61" width="34" height="34" href="${p.image}"/>`
@@ -258,12 +272,12 @@ class EnergyFlowCard extends HTMLElement {
         </g>`;
       // solar -> home
       svgFlows += `
-        <path class="flow" stroke="${colors.solar}" d="M320 ${solarY + 48} L 320 ${midY - 48}"/>
-        <path class="flow-dash" data-flow="solar-home" stroke="${colors.solar}" d="M320 ${solarY + 48} L 320 ${midY - 48}"/>`;
+        <path class="flow" stroke="${colors.solar}" d="M320 ${solarY + 78} L 320 ${midY - 78}"/>
+        <path class="flow-dash" data-flow="solar-home" stroke="${colors.solar}" d="M320 ${solarY + 78} L 320 ${midY - 78}"/>`;
       if (this._config.battery) {
         svgFlows += `
-          <path class="flow" stroke="${colors.solar}" d="M${300} ${solarY + 44} C 220 ${solarY + 70}, 170 ${midY - 50}, 150 ${midY - 4}"/>
-          <path class="flow-dash" data-flow="solar-battery" stroke="${colors.solar}" d="M${300} ${solarY + 44} C 220 ${solarY + 70}, 170 ${midY - 50}, 150 ${midY - 4}"/>`;
+          <path class="flow" stroke="${colors.solar}" d="M266 ${solarY + 57} C 230 ${solarY + 90}, 185 ${midY - 85}, 210 ${midY - 64}"/>
+          <path class="flow-dash" data-flow="solar-battery" stroke="${colors.solar}" d="M266 ${solarY + 57} C 230 ${solarY + 90}, 185 ${midY - 85}, 210 ${midY - 64}"/>`;
       }
     }
 
@@ -280,8 +294,8 @@ class EnergyFlowCard extends HTMLElement {
           <text y="48" class="sec" data-f="battery-extra"></text>
         </g>`;
       svgFlows += `
-        <path class="flow" stroke="${colors.battery}" opacity=".25" d="M195 ${midY + 25} C 245 ${midY + 35}, 275 ${midY + 15}, 295 ${midY - 5}"/>
-        <path class="flow-dash rev" data-flow="battery-home" stroke="${colors.battery}" d="M195 ${midY + 25} C 245 ${midY + 35}, 275 ${midY + 15}, 295 ${midY - 5}"/>`;
+        <path class="flow" stroke="${colors.battery}" opacity=".25" d="M230 ${midY + 37} C 255 ${midY + 40}, 285 ${midY + 5}, 249 ${midY - 33}"/>
+        <path class="flow-dash rev" data-flow="battery-home" stroke="${colors.battery}" d="M230 ${midY + 37} C 255 ${midY + 40}, 285 ${midY + 5}, 249 ${midY - 33}"/>`;
     }
 
     // Home (icon only, no name label)
@@ -306,8 +320,8 @@ class EnergyFlowCard extends HTMLElement {
           <text y="35" class="sec" data-f="grid-extra"></text>
         </g>`;
       svgFlows += `
-        <path class="flow" stroke="${colors.grid}" d="M485 ${midY + 15} C 420 ${midY + 10}, 370 ${midY}, 348 ${midY}"/>
-        <path class="flow-dash" data-flow="grid-home" stroke="${colors.grid}" d="M485 ${midY + 15} C 420 ${midY + 10}, 370 ${midY}, 348 ${midY}"/>`;
+        <path class="flow" stroke="${colors.grid}" d="M408 ${midY + 8} C 420 ${midY + 9}, 385 ${midY + 5}, 398 ${midY + 7}"/>
+        <path class="flow-dash" data-flow="grid-home" stroke="${colors.grid}" d="M408 ${midY + 8} C 420 ${midY + 9}, 385 ${midY + 5}, 398 ${midY + 7}"/>`;
     }
 
     // Car (icon only, no name label)
@@ -320,8 +334,8 @@ class EnergyFlowCard extends HTMLElement {
           <text y="24" class="sec" data-f="car-energy"></text>
         </g>`;
       svgFlows += `
-        <path class="flow" stroke="${colors.car}" d="M320 ${midY + 48} L 320 ${carY - 48}"/>
-        <path class="flow-dash" data-flow="home-car" stroke="${colors.car}" d="M320 ${midY + 48} L 320 ${carY - 48}"/>`;
+        <path class="flow" stroke="${colors.car}" d="M320 ${midY + 78} L 320 ${carY - 76}"/>
+        <path class="flow-dash" data-flow="home-car" stroke="${colors.car}" d="M320 ${midY + 78} L 320 ${carY - 76}"/>`;
     }
 
     const legendItems = [];
