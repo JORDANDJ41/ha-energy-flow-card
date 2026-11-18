@@ -629,24 +629,51 @@ function autoDetectConfig(hass) {
 
   const batteryPower = byPattern([/battery.*power/i, /batterie.*puissance/i]);
   if (batteryPower) {
+    // "battery" is a dangerously generic word in a smart home (phones,
+    // watches, the car, remotes... all have a "battery" sensor). Scope
+    // every companion lookup to entities that also share the home storage
+    // system's own device prefix (e.g. "inverter" in
+    // "sensor.inverter_battery_power"), so a phone's or the car's battery
+    // is never mistaken for the home ESS.
+    const prefixMatch = batteryPower.match(/^sensor\.(.+?)_?batter/i);
+    const batteryPrefix = prefixMatch ? prefixMatch[1].replace(/_$/, "") : "";
+    const scoped = (id) => !batteryPrefix || id.includes(batteryPrefix);
+    const unitOf = (id) => ((states[id].attributes || {}).unit_of_measurement || "");
+
     const soc =
-      ids.find((id) => (states[id].attributes || {}).device_class === "battery") ||
+      ids.find((id) => scoped(id) && (states[id].attributes || {}).device_class === "battery") ||
       ids.find(
         (id) =>
+          scoped(id) &&
           /batter(y|ie)/i.test(id) &&
           !/objectif|cible|target|goal/i.test(id) &&
-          (states[id].attributes || {}).unit_of_measurement === "%"
+          unitOf(id) === "%"
       );
+
     cfg.battery = {
       power: batteryPower,
       soc,
-      energy_today_charge:
-        findDailyByKeyword(/charge/i, /discharge|decharge/i) || findEnergyToday(batteryPower),
-      energy_today_discharge: findDailyByKeyword(/discharge|decharge/i),
-      voltage: findByUnit(/batter(y|ie)/i, (u) => /^v$/i.test(u)),
-      current: findByUnit(/batter(y|ie)/i, (u) => /^a$/i.test(u)),
-      temperature: findByUnit(/batter(y|ie)/i, (u) => /°?c$/i.test(u)),
-      soh: findByUnit(/batter(y|ie).*(soh|health|sante)/i, (u) => u === "%"),
+      energy_today_charge: ids.find(
+        (id) =>
+          scoped(id) &&
+          isEnergyUnit(id) &&
+          /(today|jour|day|daily)/i.test(id) &&
+          /charge/i.test(id) &&
+          !/discharge|decharge/i.test(id)
+      ),
+      energy_today_discharge: ids.find(
+        (id) =>
+          scoped(id) &&
+          isEnergyUnit(id) &&
+          /(today|jour|day|daily)/i.test(id) &&
+          /discharge|decharge/i.test(id)
+      ),
+      voltage: ids.find((id) => scoped(id) && /batter(y|ie)/i.test(id) && /^v$/i.test(unitOf(id))),
+      current: ids.find((id) => scoped(id) && /batter(y|ie)/i.test(id) && /^a$/i.test(unitOf(id))),
+      temperature: ids.find((id) => scoped(id) && /batter(y|ie)/i.test(id) && /°?c$/i.test(unitOf(id))),
+      soh: ids.find(
+        (id) => scoped(id) && /batter(y|ie).*(soh|health|sante)/i.test(id) && unitOf(id) === "%"
+      ),
     };
   }
 
