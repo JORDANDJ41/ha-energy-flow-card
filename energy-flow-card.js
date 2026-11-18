@@ -495,6 +495,20 @@ function autoDetectConfig(hass) {
     return best;
   };
 
+  // Known aggregate "today" counters (battery charge/discharge, grid
+  // import/export, total solar production) rarely share a naming root with
+  // their power entity (e.g. "activepower_pcc_total" vs
+  // "today_energy_import") - match by keyword + energy unit + daily-ish
+  // wording instead of token overlap.
+  const findDailyByKeyword = (mustMatch, mustNotMatch) =>
+    ids.find(
+      (id) =>
+        isEnergyUnit(id) &&
+        /(today|jour|day|daily)/i.test(id) &&
+        mustMatch.test(id) &&
+        !(mustNotMatch && mustNotMatch.test(id))
+    );
+
   // Individual PV strings: anything matching pvN / stringN / mpptN + power
   const pvRegex = /(pv|string|mppt)[_-]?(\d+)[_-]?(power|puissance)/i;
   const pvMatches = ids
@@ -510,15 +524,7 @@ function autoDetectConfig(hass) {
 
   const solarPower = byPattern([/pv_power/i, /solar.*power/i, /production/i]);
   if (solarPower || pv.length) {
-    let energyToday = findEnergyToday(solarPower);
-    if (!energyToday) {
-      // "pv_power" and "today_production" share no token by design (one is
-      // about the panels, the other about output) - fall back to any daily
-      // "production" energy sensor specifically for the combined total.
-      energyToday = ids.find(
-        (id) => /production/i.test(id) && /(today|jour|day|daily)/i.test(id) && isEnergyUnit(id)
-      );
-    }
+    const energyToday = findEnergyToday(solarPower) || findDailyByKeyword(/production/i);
     cfg.solar = solarPower ? { power: solarPower, energy_today: energyToday } : {};
   }
 
@@ -535,7 +541,9 @@ function autoDetectConfig(hass) {
     cfg.battery = {
       power: batteryPower,
       soc,
-      energy_today_charge: findEnergyToday(batteryPower),
+      energy_today_charge:
+        findDailyByKeyword(/charge/i, /discharge|decharge/i) || findEnergyToday(batteryPower),
+      energy_today_discharge: findDailyByKeyword(/discharge|decharge/i),
     };
   }
 
@@ -546,7 +554,11 @@ function autoDetectConfig(hass) {
 
   const gridPower = byPattern([/grid.*power/i, /pcc.*total/i, /reseau.*puissance/i]);
   if (gridPower) {
-    cfg.grid = { power: gridPower };
+    cfg.grid = {
+      power: gridPower,
+      energy_today_buy: findDailyByKeyword(/import|buy|achat/i, /export|sell|vente/i),
+      energy_today_sell: findDailyByKeyword(/export|sell|vente/i, /import|buy|achat/i),
+    };
   }
 
   const carPower = byPattern([/ev_charger.*(power|puissance)/i, /charger_power/i, /borne.*puissance/i]);
