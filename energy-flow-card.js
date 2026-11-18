@@ -9,7 +9,7 @@
  * License: MIT
  */
 
-const CARD_VERSION = "1.0.0";
+const CARD_VERSION = "1.1.0";
 
 // ---------- helpers ----------
 
@@ -98,12 +98,18 @@ class EnergyFlowCard extends HTMLElement {
     return 5;
   }
 
-  static getStubConfig() {
+  static getStubConfig(hass) {
+    const detected = autoDetectConfig(hass);
+    if (detected.solar || detected.pv || detected.home) return detected;
     return {
       type: "custom:energy-flow-card",
       solar: { power: "sensor.solar_power" },
       home: { power: "sensor.home_power" },
     };
+  }
+
+  static getConfigElement() {
+    return document.createElement("energy-flow-card-editor");
   }
 
   set hass(hass) {
@@ -409,6 +415,313 @@ class EnergyFlowCard extends HTMLElement {
 }
 
 customElements.define("energy-flow-card", EnergyFlowCard);
+
+// ---------- auto-detection ----------
+// Best-effort guess at a sensible configuration by scanning entity_ids and
+// device_classes. Always meant to be reviewed/corrected by the user before
+// saving (surfaced in the visual editor as a "Détecter automatiquement"
+// button that fills the form without saving on its own).
+function autoDetectConfig(hass) {
+  const cfg = { type: "custom:energy-flow-card" };
+  if (!hass || !hass.states) return cfg;
+  const states = hass.states;
+  const ids = Object.keys(states).filter((id) => id.startsWith("sensor."));
+
+  const isPower = (id) => {
+    const a = states[id].attributes || {};
+    return (
+      a.device_class === "power" ||
+      /(^|_)(kw|w)$/i.test(a.unit_of_measurement || "") ||
+      /power|puissance/i.test(id)
+    );
+  };
+
+  const byPattern = (regexes) =>
+    ids.find((id) => isPower(id) && regexes.some((r) => r.test(id)));
+
+  const findEnergyToday = (powerId) => {
+    if (!powerId) return undefined;
+    const base = powerId
+      .replace("sensor.", "")
+      .replace(/_?power.*$|_?puissance.*$/i, "");
+    const prefix = base.split("_")[0];
+    return ids.find(
+      (id) =>
+        id !== powerId &&
+        id.includes(prefix) &&
+        /(jour|today|day|daily)/i.test(id) &&
+        (states[id].attributes || {}).device_class !== "power"
+    );
+  };
+
+  // Individual PV strings: anything matching pvN / stringN / mpptN + power
+  const pvRegex = /(pv|string|mppt)[_-]?(\d+)[_-]?(power|puissance)/i;
+  const pvMatches = ids
+    .filter((id) => pvRegex.test(id) && isPower(id))
+    .map((id) => ({ id, n: parseInt(id.match(pvRegex)[2], 10) }))
+    .sort((a, b) => a.n - b.n);
+  const pv = pvMatches.map(({ id, n }) => ({
+    power: id,
+    name: `PV${n}`,
+    energy_today: findEnergyToday(id),
+  }));
+  if (pv.length) cfg.pv = pv;
+
+  const solarPower = byPattern([/\bpv_power\b/i, /solar.*power/i, /production/i]);
+  if (solarPower || pv.length) {
+    cfg.solar = solarPower
+      ? { power: solarPower, energy_today: findEnergyToday(solarPower) }
+      : {};
+  }
+
+  const batteryPower = byPattern([/battery.*power/i, /batterie.*puissance/i]);
+  if (batteryPower) {
+    const soc = ids.find(
+      (id) =>
+        /batter(y|ie)/i.test(id) &&
+        (states[id].attributes || {}).unit_of_measurement === "%"
+    );
+    cfg.battery = {
+      power: batteryPower,
+      soc,
+      energy_today_charge: findEnergyToday(batteryPower),
+    };
+  }
+
+  const homePower = byPattern([/load.*sys/i, /\bhome.*power/i, /\bload_power\b/i, /maison.*puissance/i]);
+  if (homePower) {
+    cfg.home = { power: homePower, energy_today: findEnergyToday(homePower) };
+  }
+
+  const gridPower = byPattern([/\bgrid.*power/i, /pcc.*total/i, /reseau.*puissance/i]);
+  if (gridPower) {
+    cfg.grid = { power: gridPower };
+  }
+
+  const carPower = byPattern([/ev_charger.*(power|puissance)/i, /charger_power/i, /borne.*puissance/i]);
+  if (carPower) {
+    cfg.car = { power: carPower, energy_today: findEnergyToday(carPower) };
+  }
+
+  return cfg;
+}
+
+// ---------- visual editor ----------
+
+function getPath(obj, path) {
+  const parts = path.split(".");
+  let cur = obj;
+  for (const p of parts) {
+    if (cur == null) return undefined;
+    cur = cur[p];
+  }
+  return cur;
+}
+
+function setPath(obj, path, value) {
+  const parts = path.split(".");
+  let cur = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const p = parts[i];
+    const next = parts[i + 1];
+    const isArrayIndex = /^\d+$/.test(next);
+    if (cur[p] == null) cur[p] = isArrayIndex ? [] : {};
+    cur = cur[p];
+  }
+  const last = parts[parts.length - 1];
+  if (value === "" || value === undefined) {
+    delete cur[last];
+  } else {
+    cur[last] = value;
+  }
+}
+
+class EnergyFlowCardEditor extends HTMLElement {
+  setConfig(config) {
+    this._config = JSON.parse(JSON.stringify(config || { type: "custom:energy-flow-card" }));
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (!this._built) this._render();
+    this.querySelectorAll("ha-entity-picker").forEach((el) => {
+      el.hass = hass;
+    });
+  }
+
+  _emit() {
+    this.dispatchEvent(
+      new CustomEvent("config-changed", {
+        detail: { config: this._config },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  _row(labelText, path, extraLabel, domains) {
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "display:flex; align-items:center; gap:8px; margin-bottom:6px;";
+    const label = document.createElement("div");
+    label.textContent = labelText;
+    label.style.cssText = "width:120px; font-size:.85rem; color:var(--secondary-text-color); flex-shrink:0;";
+    const picker = document.createElement("ha-entity-picker");
+    picker.hass = this._hass;
+    picker.value = getPath(this._config, path) || "";
+    picker.label = extraLabel || "";
+    picker.includeDomains = domains || ["sensor"];
+    picker.style.flex = "1";
+    picker.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+      setPath(this._config, path, ev.detail.value);
+      this._emit();
+    });
+    wrap.appendChild(label);
+    wrap.appendChild(picker);
+    return wrap;
+  }
+
+  _textRow(labelText, path) {
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "display:flex; align-items:center; gap:8px; margin-bottom:6px;";
+    const label = document.createElement("div");
+    label.textContent = labelText;
+    label.style.cssText = "width:120px; font-size:.85rem; color:var(--secondary-text-color); flex-shrink:0;";
+    const input = document.createElement("ha-textfield");
+    input.value = getPath(this._config, path) || "";
+    input.style.flex = "1";
+    input.addEventListener("input", (ev) => {
+      setPath(this._config, path, ev.target.value);
+      this._emit();
+    });
+    wrap.appendChild(label);
+    wrap.appendChild(input);
+    return wrap;
+  }
+
+  _section(title, body) {
+    const sec = document.createElement("div");
+    sec.style.cssText = "border:1px solid var(--divider-color); border-radius:8px; padding:10px 12px; margin-bottom:12px;";
+    const h = document.createElement("div");
+    h.textContent = title;
+    h.style.cssText = "font-weight:600; margin-bottom:8px; color:var(--primary-text-color);";
+    sec.appendChild(h);
+    body.forEach((el) => sec.appendChild(el));
+    return sec;
+  }
+
+  _runAutoDetect() {
+    const detected = autoDetectConfig(this._hass);
+    const prev = this._config;
+    this._config = { type: prev.type || "custom:energy-flow-card", ...detected };
+    this._emit();
+    this._render();
+    this._notice(
+      "Configuration détectée automatiquement — vérifiez chaque champ ci-dessous puis corrigez/complétez si besoin avant d'enregistrer."
+    );
+  }
+
+  _notice(text) {
+    let n = this.querySelector(".efc-notice");
+    if (!n) {
+      n = document.createElement("div");
+      n.className = "efc-notice";
+      n.style.cssText =
+        "background:var(--info-color,#2196f3); color:white; padding:8px 12px; border-radius:6px; font-size:.85rem; margin-bottom:12px;";
+      this._form.prepend(n);
+    }
+    n.textContent = text;
+  }
+
+  _render() {
+    this.innerHTML = `<div class="efc-editor" style="padding:4px 2px;"></div>`;
+    this._form = this.querySelector(".efc-editor");
+
+    const detectBtn = document.createElement("mwc-button");
+    detectBtn.setAttribute("raised", "");
+    detectBtn.textContent = "🔍 Détecter automatiquement";
+    detectBtn.style.marginBottom = "14px";
+    detectBtn.addEventListener("click", () => this._runAutoDetect());
+    this._form.appendChild(detectBtn);
+
+    this._form.appendChild(
+      this._section("Général", [this._textRow("Titre", "title")])
+    );
+
+    this._form.appendChild(
+      this._section("Solaire (total)", [
+        this._row("Puissance", "solar.power"),
+        this._row("Énergie du jour", "solar.energy_today"),
+      ])
+    );
+
+    const pv = Array.isArray(this._config.pv) ? this._config.pv : [];
+    const pvRows = [];
+    pv.forEach((_, i) => {
+      const line = document.createElement("div");
+      line.style.cssText = "border-top:1px dashed var(--divider-color); padding-top:8px; margin-top:8px;";
+      line.appendChild(this._row(`PV${i + 1} puissance`, `pv.${i}.power`));
+      line.appendChild(this._row(`PV${i + 1} énergie/j`, `pv.${i}.energy_today`));
+      line.appendChild(this._textRow(`PV${i + 1} nom`, `pv.${i}.name`));
+      const rm = document.createElement("mwc-button");
+      rm.textContent = "Retirer cette ligne";
+      rm.addEventListener("click", () => {
+        this._config.pv.splice(i, 1);
+        this._emit();
+        this._render();
+      });
+      line.appendChild(rm);
+      pvRows.push(line);
+    });
+    const addBtn = document.createElement("mwc-button");
+    addBtn.textContent = "+ Ajouter une ligne PV";
+    addBtn.addEventListener("click", () => {
+      if (!Array.isArray(this._config.pv)) this._config.pv = [];
+      this._config.pv.push({});
+      this._emit();
+      this._render();
+    });
+    this._form.appendChild(this._section(`Lignes PV individuelles (${pv.length})`, [...pvRows, addBtn]));
+
+    this._form.appendChild(
+      this._section("Batterie", [
+        this._row("Puissance", "battery.power"),
+        this._row("État de charge (%)", "battery.soc"),
+        this._row("Énergie chargée/j", "battery.energy_today_charge"),
+        this._row("Énergie déchargée/j", "battery.energy_today_discharge"),
+      ])
+    );
+
+    this._form.appendChild(
+      this._section("Maison", [
+        this._row("Puissance", "home.power"),
+        this._row("Énergie du jour", "home.energy_today"),
+      ])
+    );
+
+    this._form.appendChild(
+      this._section("Réseau", [
+        this._row("Puissance", "grid.power"),
+        this._row("Énergie achetée/j", "grid.energy_today_buy"),
+        this._row("Énergie vendue/j", "grid.energy_today_sell"),
+      ])
+    );
+
+    this._form.appendChild(
+      this._section("Véhicule électrique (optionnel)", [
+        this._row("Puissance de charge", "car.power"),
+        this._row("Énergie chargée/j", "car.energy_today"),
+        this._row("Capteur \"en charge\"", "car.charging", "", ["binary_sensor"]),
+        this._textRow("Nom", "car.name"),
+      ])
+    );
+
+    this._built = true;
+  }
+}
+
+customElements.define("energy-flow-card-editor", EnergyFlowCardEditor);
 
 window.customCards = window.customCards || [];
 window.customCards.push({

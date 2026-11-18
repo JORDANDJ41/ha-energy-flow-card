@@ -4,6 +4,8 @@ Carte Lovelace personnalisée pour Home Assistant : un diagramme de flux d'éner
 
 Contrairement aux cartes de flux existantes limitées à 1-2 entrées solaires fixes, cette carte accepte **n'importe quel nombre de strings PV** (1, 2, 4, ou plus), chacune avec son propre nom, icône/logo et compteur du jour.
 
+**Éditeur visuel inclus** — pas besoin d'écrire de YAML : ouvrez la configuration de la carte dans l'éditeur de tableau de bord, et cliquez sur **"🔍 Détecter automatiquement"** pour que la carte analyse vos entités et propose une configuration de départ (PV, batterie, maison, réseau, VE). Vérifiez/corrigez chaque champ proposé avant d'enregistrer — la détection automatique est une aide, pas une validation.
+
 ## Installation
 
 ### Via HACS (dépôt personnalisé)
