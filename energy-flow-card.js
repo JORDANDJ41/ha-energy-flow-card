@@ -9,7 +9,7 @@
  * License: MIT
  */
 
-const CARD_VERSION = "1.1.0";
+const CARD_VERSION = "1.1.1";
 
 // ---------- helpers ----------
 
@@ -635,6 +635,8 @@ class EnergyFlowCardEditor extends HTMLElement {
   }
 
   _render() {
+    if (!this._config) this._config = { type: "custom:energy-flow-card" };
+
     this.innerHTML = `<div class="efc-editor" style="padding:4px 2px;"></div>`;
     this._form = this.querySelector(".efc-editor");
 
