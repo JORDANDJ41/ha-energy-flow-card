@@ -9,7 +9,7 @@
  * License: MIT
  */
 
-const CARD_VERSION = "1.1.1";
+const CARD_VERSION = "1.2.0";
 
 // ---------- helpers ----------
 
@@ -611,15 +611,118 @@ class EnergyFlowCardEditor extends HTMLElement {
     return sec;
   }
 
-  _runAutoDetect() {
+  async _runAutoDetect() {
     const detected = autoDetectConfig(this._hass);
-    const prev = this._config;
-    this._config = { type: prev.type || "custom:energy-flow-card", ...detected };
-    this._emit();
+    const prevType = this._config.type || "custom:energy-flow-card";
+    this._config = { type: prevType };
+    this._missingCounters = [];
+    this._render();
+    this._notice("🔍 Recherche en cours…");
+
+    const steps = [
+      ["solar", "Solaire"],
+      ["pv", "Lignes PV"],
+      ["battery", "Batterie"],
+      ["home", "Maison"],
+      ["grid", "Réseau"],
+      ["car", "Véhicule électrique"],
+    ];
+    for (const [key, label] of steps) {
+      if (detected[key] === undefined) continue;
+      await new Promise((r) => setTimeout(r, 280));
+      this._config[key] = detected[key];
+      this._emit();
+      this._render();
+      this._notice(`🔍 Détecté : ${label}…`);
+    }
+
+    this._computeMissingCounters();
     this._render();
     this._notice(
       "Configuration détectée automatiquement — vérifiez chaque champ ci-dessous puis corrigez/complétez si besoin avant d'enregistrer."
     );
+  }
+
+  _slug(text) {
+    return text
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+  }
+
+  _counterSnippet(entityId, label) {
+    const slug = this._slug(label);
+    return `sensor:
+  - platform: integration
+    name: "${label} - Énergie cumulée"
+    source: ${entityId}
+    unit_prefix: k
+    round: 3
+    method: left
+
+utility_meter:
+  ${slug}_energie_jour:
+    source: sensor.${slug}_energie_cumulee
+    name: "${label} - Énergie du jour"
+    cycle: daily`;
+  }
+
+  _computeMissingCounters() {
+    const cfg = this._config;
+    const missing = [];
+    const check = (power, energyToday, label) => {
+      if (power && !energyToday) {
+        missing.push({ label, entityId: power, snippet: this._counterSnippet(power, label) });
+      }
+    };
+    if (cfg.solar) check(cfg.solar.power, cfg.solar.energy_today, cfg.solar.name || "Solaire");
+    (cfg.pv || []).forEach((p, i) =>
+      check(p.power, p.energy_today, p.name || `PV${i + 1}`)
+    );
+    if (cfg.battery) check(cfg.battery.power, cfg.battery.energy_today_charge, (cfg.battery.name || "Batterie"));
+    if (cfg.home) check(cfg.home.power, cfg.home.energy_today, cfg.home.name || "Maison");
+    if (cfg.grid) check(cfg.grid.power, cfg.grid.energy_today_buy, cfg.grid.name || "Réseau");
+    if (cfg.car) check(cfg.car.power, cfg.car.energy_today, cfg.car.name || "Voiture");
+    this._missingCounters = missing;
+  }
+
+  _renderMissingCounters() {
+    if (!this._missingCounters || !this._missingCounters.length) return null;
+    const wrap = document.createElement("div");
+    wrap.style.cssText =
+      "background:var(--warning-color,#ff9800); color:#000; padding:10px 12px; border-radius:6px; margin-bottom:12px; font-size:.85rem;";
+    const title = document.createElement("div");
+    title.style.fontWeight = "600";
+    title.textContent = `⚠️ ${this._missingCounters.length} entité(s) sans compteur du jour — voici le YAML à ajouter (configuration.yaml ou un package), puis redémarrer Home Assistant :`;
+    wrap.appendChild(title);
+    this._missingCounters.forEach((m) => {
+      const box = document.createElement("div");
+      box.style.cssText = "margin-top:8px; background:rgba(0,0,0,.15); border-radius:6px; padding:8px;";
+      const lbl = document.createElement("div");
+      lbl.style.cssText = "font-weight:600; margin-bottom:4px;";
+      lbl.textContent = m.label;
+      const pre = document.createElement("pre");
+      pre.textContent = m.snippet;
+      pre.style.cssText = "white-space:pre-wrap; font-size:.75rem; margin:0 0 6px; font-family:monospace;";
+      const btn = document.createElement("mwc-button");
+      btn.textContent = "Copier";
+      btn.addEventListener("click", () => {
+        navigator.clipboard
+          .writeText(m.snippet)
+          .then(() => {
+            btn.textContent = "Copié !";
+            setTimeout(() => (btn.textContent = "Copier"), 1500);
+          })
+          .catch(() => {});
+      });
+      box.appendChild(lbl);
+      box.appendChild(pre);
+      box.appendChild(btn);
+      wrap.appendChild(box);
+    });
+    return wrap;
   }
 
   _notice(text) {
@@ -646,6 +749,9 @@ class EnergyFlowCardEditor extends HTMLElement {
     detectBtn.style.marginBottom = "14px";
     detectBtn.addEventListener("click", () => this._runAutoDetect());
     this._form.appendChild(detectBtn);
+
+    const missingPanel = this._renderMissingCounters();
+    if (missingPanel) this._form.appendChild(missingPanel);
 
     this._form.appendChild(
       this._section("Général", [this._textRow("Titre", "title")])
@@ -730,7 +836,7 @@ window.customCards.push({
   type: "energy-flow-card",
   name: "Multi-PV Flow Card",
   description:
-    "Carte animée de flux d'énergie : solaire (1 à N strings PV), batterie, maison, réseau et véhicule électrique, avec icônes/logos configurables.",
+    "🚧 En développement — Carte animée de flux d'énergie : solaire (1 à N strings PV), batterie, maison, réseau et véhicule électrique, avec icônes/logos configurables.",
   preview: false,
   documentationURL: "https://github.com/JORDANDJ41/ha-energy-flow-card",
 });

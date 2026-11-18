@@ -1,5 +1,7 @@
 # Multi-PV Flow Card
 
+> 🚧 **En développement — pas encore stable.** Cette carte vient d'être créée et est encore testée activement : attendez-vous à des bugs et à des changements de configuration entre versions. N'hésitez pas à ouvrir une issue si quelque chose ne fonctionne pas.
+
 Carte Lovelace personnalisée pour Home Assistant : un diagramme de flux d'énergie animé — solaire (une ou plusieurs lignes PV), batterie, maison, réseau et véhicule électrique — avec icônes ou logos configurables par nœud.
 
 Contrairement aux cartes de flux existantes limitées à 1-2 entrées solaires fixes, cette carte accepte **n'importe quel nombre de strings PV** (1, 2, 4, ou plus), chacune avec son propre nom, icône/logo et compteur du jour.
